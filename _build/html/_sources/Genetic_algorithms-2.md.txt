@@ -1,0 +1,1930 @@
+# Optimisation of the Global Calculator via Genetic Algorithms
+
+This investigation aims to generate different climate change mitigation pathways with the “Global Calculator” - a complex model used to forecast the world’s energy, food and land systems to 2050 (http://tool.globalcalculator.org/). Performing a constrained optimisation of the model’s input parameter space yields alternative pathways to sustainability. 
+ 
+The key challenge of such an optimisation is to explore a broad parameter space (~9e50 different parameter combinations) rapidly.
+
+Genetic algorithms are commonly used to generate solutions to optimization problems by using biologically inspired operators such as mutation, crossover and selection.
+
+In this implementation, each generation contains a fixed number of chromosomes (lever combinations). The two fittest (as per the cost function) chromosomes are selected. These two are mated, yielding a new generating. In this process, random mutations are introduce - These correspond to randomly moving a lever up or down by a quantity of 0.1. 
+
+This implementation enables the user to find a lever combination that is closest to meeting the constraints. Such constraints are divided into four types:
+
+- Input value constraints: The value of any input can be fixed. For example, as per our discussion, we can fix Electric & Hydrogen to 3.0, Global Population to 2.0, Wind to 2.5, Nuclear to 1.0 and Solar Capacity to 3.2. 
+- Input range constraints: I have bounded the range of each lever between 1.5 and 3.5 to avoid extreme / non-realistic values. The range of each lever can be specified – For example, I have (arbitrarily, for illustration purposes) decided to bound the Diet Levers (Calories consumed, Quantity of meat and Type of meat) between 2.2 and 3.0. 
+- Output constraints: If you click the “Compare” tab, you can find around 55 output values that can be constrained. For example, I have (arbitrarily, for illustration purposes) decided to set a constraint for Total energy demand at 420 EJ/year and for Forest area at 4200 million of hectares.
+- Climate and GDP constraints: All combinations also seek to minimise climate impact and cost.
+
+
+After running the optimiser, a pathway that satisfies all the constraints listed above is generated:
+
+http://tool.globalcalculator.org/globcalc.html?levers=2pl3r3vs3j2yhplitmptg2vqy1pyhwoiqmrtmlql3plxyyf222211111111/dashboard/en 
+
+
+```python
+import time 
+import string
+import math
+import random
+import csv   
+from functools import reduce
+from openpyxl import load_workbook
+
+import pandas as pd
+import numpy as np
+
+
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import seaborn as sns
+import itertools
+
+import selenium
+from selenium import webdriver
+from selenium.common.exceptions import ElementClickInterceptedException
+from webdriver_manager.chrome import ChromeDriverManager
+
+from scipy.optimize import curve_fit
+from scipy.stats import norm
+from scipy import optimize
+from scipy.stats import multivariate_normal
+
+from statsmodels.graphics.tsaplots import plot_pacf
+from statsmodels.graphics.tsaplots import plot_acf
+```
+
+# Set-up
+
+
+```python
+driver = webdriver.Chrome(ChromeDriverManager().install()) # Set browser
+```
+
+    [WDM] - Current google-chrome version is 84.0.4147
+    [WDM] - Get LATEST driver version for 84.0.4147
+    [WDM] - Get LATEST driver version for 84.0.4147
+    [WDM] - Trying to download new driver from http://chromedriver.storage.googleapis.com/84.0.4147.30/chromedriver_win32.zip
+    
+
+     
+    
+
+    [WDM] - Driver has been saved in cache [C:\Users\44783\.wdm\drivers\chromedriver\win32\84.0.4147.30]
+    
+
+
+```python
+driver.get('http://tool.globalcalculator.org/') # Open website
+```
+
+
+```python
+id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+id_box.click()
+```
+
+
+```python
+dfs = pd.read_excel("Output_map.xlsx") # File mapping output lever names to xpaths 
+dfs_3 = pd.read_excel("Input_map.xlsx") # File mapping input names to xpaths 
+for i in range(len(dfs)): # Generate html lever addresses and put them in the dataframe
+    dfs.iloc[i, 2] = '/html/body/table[1]/tbody/tr/td/table/tbody/tr[2]/td[1]/div[13]/div/table/tbody/tr[' + str(dfs.iloc[i, 1]).strip("%") + ']/td[5]/div/font' 
+```
+
+
+```python
+# Each letter corresponds to a lever value: a = 1.0; b = 1.1; c = 1.2; ... C = 3.9; D = 4.0
+letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D']
+lever_names = list(dfs_3.iloc[:, 0].to_numpy()) # Create list with all lever names
+output_names = list(dfs.iloc[:, 0].to_numpy()) # Create list with all output names
+```
+
+
+```python
+def map_to_letter(value):
+    """Takes a float value in the range [1, 4.0] and returns its corresponding URL character"""
+    if value != 2 and value != 3 and value != 4: # Special cases 
+        if value < 4: 
+            pos = int((value - 1.0)*10)
+            try:
+                back = letters[pos]
+            except: # Oops, the value is out of bounds
+                print("Not enough letters, fetching position: ", pos, " corresponding to value: ", value)
+        else: # Special case: Value = 4
+            back = letters[-1]
+    else: 
+        back = int(value)
+    return back
+```
+
+
+```python
+def initial_chromosome():
+    """Generates and return a random URL (address) and its corresponding lever values (input_levers)"""
+    address = []; input_levers = []
+    string = "" # URL address to be stored here
+    for i in range(49): # Generate a random value for each lever, map it to a letter and save it
+        rand_float = random.randint(18, 32)/10 # Define bounds for random number generator (currently set to [1.8, 3.2])
+        input_levers.append(rand_float); address.append(map_to_letter(rand_float)) # Store them
+    address[43:47] = [1, 1, 1, 1]  # CCS values are fixed at 1 for the moment
+    input_levers[43:47] = [1, 1, 1, 1] # CCS values are fixed at 1 for the moment  
+    for i in address: # Construct string containing the current lever combination
+        string = string + str(i)
+    address = "http://tool.globalcalculator.org/globcalc.html?levers=" + string + "2211111111/technology/en" # Construct URL address
+    return address, input_levers
+```
+
+
+```python
+def new_URL(name, value, address = "http://tool.globalcalculator.org/globcalc.html?levers=l2wz222CBpp3pC3f2Dw3DC3plzgj1tA13pp2p223ri11111p22211111111/dashboard/en"): 
+    """ 
+    Generate a new URL address by changing a lever value.
+        Parameters:
+        - Name (string): Target lever name
+        - Value (float): Target value for lever
+        - Address (string): URL where lever will be changed. Set to TIAM-UCL 2DS pathway by default. 
+        Returns:
+        - URL (string): URL after changes. 
+    """
+    value = map_to_letter(value) # Map value to letter 
+    index = int(find_lever_URL_position(name)) # Find URL position of given lever
+    URL = address[ : 53 + index] + str(value) + address[54 + index :] # Insert given value in its corresponding URL position
+    return URL 
+```
+
+
+```python
+def find_lever_URL_position(name): 
+    """Given a lever name, return its position in the URL"""
+    return str(dfs_3[dfs_3.iloc[:, 0].str.match(name)].iloc[0, 1]) # Get lever position to insert in the URL
+```
+
+
+```python
+def open_lever_menus():
+    """Opens all the lever menus of the Global Calculator"""
+    for i in range(1, 16): # Iterate through menus
+        try: # Tries to open the menu
+            driver.find_element_by_xpath('//*[@id="ml-open-close-link-' + str(i) +  '"]' ).click() # Open menu
+            time.sleep(0.3) # Server can't respond quicker than this 
+        except ElementClickInterceptedException: # If opening menus too fast, then slow down
+            time.sleep(1)
+            driver.find_element_by_xpath('//*[@id="ml-open-close-link-' + str(i) +  '"]' ).click()
+    return
+```
+
+
+```python
+def new_lever_combination(threshold = False, threshold_names = [], thresholds = []):
+    """Returns an array containing a random value for each lever"""
+    random_lever_values = []
+    if threshold == False:
+        for i in range(len(lever_names)):
+            random_lever_values.append(random.randint(15, 30)/10) # Generate random lever value
+    else:
+        for i in range(len(lever_names)):
+            if lever_names[i] in threshold_names:
+                lower_threshold, upper_threshold = thresholds[threshold_names.index(lever_names[i])]
+                random_lever_values.append(random.randint(lower_threshold*10, upper_threshold*10)/10) # Generate random lever value
+            else:
+                random_lever_values.append(random.randint(15, 30)/10) # Generate random lever value
+    return random_lever_values
+```
+
+
+```python
+def read_CO2():
+    """For the current lever combination, return the CO2 level (GtCO2)"""
+    userid_element = driver.find_element_by_xpath('//*[@id="container_dashboard_co2_budget"]') # Find element that contains CO2 value
+    time.sleep(0.05)
+    co2 = userid_element.text.splitlines()[-6] # Get CO2 value from the container
+    return co2 
+```
+
+
+```python
+def moving_average(a, n=3) :
+    """Simple moving average filter"""
+    ret = np.cumsum(a, dtype=float) # Cumulative sum of input values
+    ret[n:] = ret[n:] - ret[:-n] # Differences given by window length n
+    return ret[n - 1:] / n # Divide by window length
+```
+
+
+```python
+def move_lever(lever, value, costs = False,  address = str(driver.current_url),  
+               constraint = False, constraint_levers = [], constraint_values = []): 
+    """
+    Sets a lever to a given value. Reads corresponding temperature and, if selected, cost values. 
+    Parameters:
+        - lever (list of strings): Contains the names of the levers to be moved. 
+        - value (list of floats): Contains the value of the levers to be moved - Automatically matched to lever names. 
+        - costs (optional, boolean): Flag to decide whether to read cost values or not. 
+        - address (optional, string): URL address corresponding to given lever combination. 
+        - constraint (optional, boolean): Flaf to decide whether to set exact input constraints or not. 
+        - constraint_levers (optional, list of strings): Contains the names of the levers to be fixed. 
+        - constraint_values (optional, list of floats): Contains the values to fix the specified levers.
+    Returns:
+        - output (list): Contains temperature and cost values for the new lever position
+    """
+    # Update URL address with input lever names and values, one at a time 
+    for i in range(len(lever)):
+        address = new_URL(lever[i], value[i], address = address)  
+    
+    # Overwrite for constraint
+    if constraint == True: 
+        address = overwrite(constraint_levers, constraint_values, address = address)
+     
+    # Open website corresponding to the input values
+    driver.get(address) 
+    
+    ########################################## IMPORTANT ####################################################
+    # All of the lines below are in charge of webscraping the temperature and, if selected, the cost values. 
+    # The Global Calculator is a hard to webscrape website (sometimes, it results in bugs or uncoherent
+    # temperature and cost values). The code below ensures that, no matter what, the values will be read. 
+    # To do so it performs different actions based on the current state of the website and the output values. 
+    #########################################################################################################
+    
+    time.sleep(0.2)
+    id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+    id_box.click()
+    time.sleep(1)
+    
+    # Read temperature values
+    try:
+        output = int(read_CO2()[:4]) # Read output CO2
+    except: # Problem reading output CO2? The code below sorts it
+        time.sleep(1)
+        open_lever_menus() # Open lever menus
+        move_lever([lever[0]],[1.3], costs = False) # Move lever to an arbitrary value
+        driver.get(address) # Open website back 
+        time.sleep(0.2)
+        id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+        id_box.click()
+        output = int(read_CO2()[:4]) # Read output CO2
+        
+    # Read cost values   
+    if costs == True:   
+        driver.find_element_by_xpath('//*[@id="mn-6"]').click() # Move to compare tab 
+        time.sleep(0.2)
+        userid_element = driver.find_element_by_xpath('//*[@id="container_costs_vs_counterfactual"]/div/div[11]') # Read GDP
+        cost_output = userid_element.text
+        try:
+            cost_output = float(cost_output[:4].rstrip("%")) # Convert GDP from string to float
+        except: # Problem converting GDP? The code below sorts it
+            cost_output = float(cost_output[:3].rstrip("%"))
+        
+        # Reload the page and bypass start
+        driver.refresh() # Refresh
+        time.sleep(1)
+        id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+        id_box.click()
+        userid_element = driver.find_element_by_xpath('//*[@id="container_costs_vs_counterfactual"]/div/div[12]') # Read text below GDP value
+        cost_flag = userid_element.text   
+        
+        # Find sign of GDP (less expensive => increase; more expensive => decrease)
+        if cost_flag == 'less expensive': 
+            cost_output = -cost_output # Reverse sign
+            
+        # Go back to the overview section
+        try:
+            driver.find_element_by_xpath('//*[@id="mn-1"]').click() 
+        except: # Problem going back to the overview section? The code below sorts it
+            time.sleep(0.2)
+            id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+            id_box.click()
+        output = [output, cost_output] # Output temperature and cost values
+    return  output
+```
+
+
+```python
+def move_lever(lever, value, costs = False,  address = str(driver.current_url),  
+               constraint = False, constraint_levers = [], constraint_values = []): 
+    """
+    Sets a lever to a given value. Reads corresponding temperature and, if selected, cost values. 
+    Parameters:
+        - lever (list of strings): Contains the names of the levers to be moved. 
+        - value (list of floats): Contains the value of the levers to be moved - Automatically matched to lever names. 
+        - costs (optional, boolean): Flag to decide whether to read cost values or not. 
+        - address (optional, string): URL address corresponding to given lever combination. 
+        - constraint (optional, boolean): Flaf to decide whether to set exact input constraints or not. 
+        - constraint_levers (optional, list of strings): Contains the names of the levers to be fixed. 
+        - constraint_values (optional, list of floats): Contains the values to fix the specified levers.
+    Returns:
+        - output (list): Contains temperature and cost values for the new lever position
+    """
+    # Update URL address with input lever names and values, one at a time 
+    for i in range(len(lever)):
+        address = new_URL(lever[i], value[i], address = address)  
+    
+    # Overwrite for constraint
+    if constraint == True: 
+        address = overwrite(constraint_levers, constraint_values, address = address)
+     
+    # Open website corresponding to the input values
+    driver.get(address) 
+    
+    ########################################## IMPORTANT ####################################################
+    # All of the lines below are in charge of webscraping the temperature and, if selected, the cost values. 
+    # The Global Calculator is a hard to webscrape website (sometimes, it results in bugs or uncoherent
+    # temperature and cost values). The code below ensures that, no matter what, the values will be read. 
+    # To do so it performs different actions based on the current state of the website and the output values. 
+    #########################################################################################################
+    
+    time.sleep(0.2)
+    id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+    id_box.click()
+    time.sleep(1)
+    
+    # Read temperature values
+    try:
+        time.sleep(0.1)
+        output = int(read_CO2()[:4]) # Read output CO2
+    except: # Problem reading output CO2? The code below sorts it
+        time.sleep(1)
+        open_lever_menus() # Open lever menus
+        move_lever([lever[0]],[2.0], costs = False) # Move lever to an arbitrary value
+        driver.get(address) # Open website back 
+        time.sleep(0.2)
+        id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+        id_box.click()
+        time.sleep(0.1)
+        output = int(read_CO2()[:4]) # Read output CO2 # CHANGED
+        
+    # Read cost values   
+    if costs == True:   
+        driver.find_element_by_xpath('//*[@id="mn-6"]').click() # Move to compare tab 
+        time.sleep(0.2)
+        userid_element = driver.find_element_by_xpath('//*[@id="container_costs_vs_counterfactual"]/div/div[11]') # Read GDP
+        cost_output = userid_element.text
+        try:
+            cost_output = float(cost_output[:4].rstrip("%")) # Convert GDP from string to float
+        except: # Problem converting GDP? The code below sorts it
+            cost_output = float(cost_output[:3].rstrip("%"))
+        
+        # Reload the page and bypass start
+        driver.refresh() # Refresh
+        time.sleep(1)
+        id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+        id_box.click()
+        userid_element = driver.find_element_by_xpath('//*[@id="container_costs_vs_counterfactual"]/div/div[12]') # Read text below GDP value
+        cost_flag = userid_element.text   
+        
+        # Find sign of GDP (less expensive => increase; more expensive => decrease)
+        if cost_flag == 'less expensive': 
+            cost_output = -cost_output # Reverse sign
+            
+        # Go back to the overview section
+        try:
+            driver.find_element_by_xpath('//*[@id="mn-1"]').click() 
+        except: # Problem going back to the overview section? The code below sorts it
+            time.sleep(0.2)
+            id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+            id_box.click()
+        output = [output, cost_output] # Output temperature and cost values
+    return  output
+```
+
+
+```python
+def iterate(iterations = 5, population_size = 30, 
+            constraint = False, constraint_levers = [], constraint_values = [], 
+            output_constraint = False, output_constraint_names = [], output_constraints = [],
+            threshold = False,  threshold_names  = [], thresholds = [],  
+            plot = False,
+            std_devs = [] ):
+    """
+    Given a set of constraints performs GA iteration(s) on the Global Calculator.
+    Parameters:
+        - iterations (int): Number of GA iterations. 
+        - population_size (int): Number of chromosomes per iteration. 
+        - constraint (boolean): Flag to decide whether to fix input levers or not. 
+        - constraint_levers (list of strings): Contains the names of the levers to be fixed. 
+        - constraint_Values (list of floats): Contains the values of the levers to be fixed. 
+        - output_constraint (boolean): Flag to decide whether to fix outputs or not. 
+        - output_constraint_names (list of strings): Contains the names of the output to be fixed. 
+        - output_constraints (list of floats): Contains the values of the output to be fixed. 
+        - threshold (boolean): Flag to decide whether to bound levers within a range or not. 
+        - threshold_names (list of strings): Contains the names of the levers to be bounded within a range. 
+        - thresholds (list of list of floats): Contains the upper and lower threshold to bound the specified levers. 
+    Returns:
+        - all_fitness (list of floats): Contains the total fitness value of each generation.
+        - lever_values (list of lists of floats): Contains the lever values of all the chromosomes from the last generation.
+    """
+    legends = []; plt.figure(figsize = (16, 9))
+    all_fitness = []; lever_values = []; results = []; output_values = []
+    lever_names = list(dfs_3.iloc[:, 0].to_numpy()) # Create list with all lever names
+    
+    # Initialise population randomly
+    for i in range(population_size): # Population size
+        
+        # Generate chromosome and read associated temperature, cost and other output values
+        lever_values_temp, temperature_cost_temp = generate_chromosome(constraint = constraint, constraint_levers = constraint_levers, constraint_values = constraint_values, threshold = threshold, threshold_names  = threshold_names, thresholds = thresholds)  # Generate chromosome
+        lever_values.append(lever_values_temp)
+        results.append(temperature_cost_temp) # Calculate temperature and cost values associated to chromosome
+        if output_constraint == True: # If output constraint set, read output
+            output_values.append(read_outputs())      
+        
+    # Perform iterations of GA
+    for j in range(iterations): # Fixed number of iterations (replace by tolerance later on)   
+        # Plotting routine
+        if plot == True:
+            c = next(palette)
+            count = 1
+            for pair in results:
+                if count%population_size == 0:
+                    plt.plot(pair[0], pair[1], '.',  color=c, label = "Generation " + str(j + 1)) #'darkorange' 
+                else: 
+                    count += 1
+                    plt.plot(pair[0], pair[1], '.',  color=c)
+            plt.xlim(2700, 4500)
+            plt.ylim(-5, 2)
+            plt.xlabel("GtCO2 emissions per capita", fontsize = 15)
+            plt.ylabel("$\Delta$GDP", fontsize = 15)
+            plt.title("Population evolution", fontsize = 20)
+            plt.legend()
+            #legends.append("Generation " + str(j))
+            #plt.show()
+        
+        # Evaluate fitness
+        fitness_values = []
+        for i in range(len(results)):
+            if output_constraint == True:
+                fitness_values.append(fitness(results[i], output_constraint = output_constraint, current_output_values = output_values[i], output_constraint_names =  output_constraint_names, output_constraints = output_constraints, std_devs = std_devs)) 
+            else: 
+                fitness_values.append(fitness(results[i])) 
+        all_fitness.append(sum(fitness_values)) # Find sum of fitness
+        
+        # Find fittest candidates <=> Parents  
+        fittest_index = sorted(range(len(fitness_values)), key = lambda sub: fitness_values[sub])[:2] # Find the fittest 2
+        parent_1 = lever_values[fittest_index [0]] # Find lever combination of parent 1
+        parent_2 = lever_values[fittest_index [1]] # Lever combination of aprent 2
+        
+        # Printing routine
+        print("Generation: ", j+1, "; Fitness is: ", sum(fitness_values))
+        print("Temperature and cost values: ", results[fittest_index[0]], "; ", results[fittest_index[1]])
+        print("Parents:")
+        print(parent_1)
+        print(parent_2, "\n")
+        
+        # Crossover and mutation
+        for i in range(len(lever_values)): # Perform crossover by mating parents using uniform crossover (high mutation prob)
+            
+            # If some inputs are bounded within thresholds, take into account when mating
+            if lever_names[i] in threshold_names:
+                th = thresholds[threshold_names.index(lever_names[i])] # Temporary variable containing current threshold
+                lever_values[i] = mate(parent_1, parent_2, threshold = True, threshold_value = th) # Generates full new set of lever combination
+            
+            # Otherwise mate right away
+            else:
+                lever_values[i] = mate(parent_1, parent_2) # Generates full new set of lever combinations
+        
+        results = []; output_values = []
+        
+        # Calculate temperature and cost of each lever combination and overwrite lever values according to constraints
+        for lever_combination in lever_values: # For each chromosome
+            lever_combination_temp = lever_combination # Store it in a temp variable
+            # Overwrite lever values with constraints. If current lever is not constrained, it does nothing 
+            lever_names, lever_combination = overwrite_lever_values(lever_names, lever_combination, constraint_levers, constraint_values)
+            lever_values[lever_values.index(lever_combination_temp)] = lever_combination # Set current lever values after constraint
+            # Read temperature and cost values for given lever combination (w or w/o constraint)
+            results.append(move_lever(lever_names, lever_combination, costs = True, constraint = constraint,  constraint_levers = constraint_levers, constraint_values = constraint_values))
+            # Read outher output values for current lever combination
+            if output_constraint == True:
+                output_values.append(read_outputs())
+    plt.show()
+    return all_fitness, lever_values
+```
+
+
+```python
+lever_names
+```
+
+
+
+
+    ['Global population',
+     'Urbanisation',
+     'Passenger distance',
+     'Freight distance',
+     'Mode',
+     'Occupancy & load',
+     'Car own hire ',
+     'Transport efficiency',
+     'Electric & hydrogen',
+     'Building size',
+     'Temperature & hot water use ',
+     'Lighting & appliance use',
+     'Building insultion',
+     'Temperature and cooking technology',
+     'Appliance efficiency ',
+     'Product lifespan & demand',
+     'Design, materials & recycling',
+     'Iron, steel & aluminium',
+     'Chemicals',
+     'Paper & other',
+     'Cement',
+     'CCS manufacturing',
+     'CCS electricity',
+     'Coal / oil / gas ',
+     'Fossil fuel efficiency ',
+     'Nuclear',
+     'Wind',
+     'Hydroelectric',
+     'Marine',
+     'Solar',
+     'Geothermal',
+     'Storage & demand shifting ',
+     'Calories consumed ',
+     'Quantitiy of meat',
+     'Type of meat ',
+     'Crop yields',
+     'Livestock grains/residues fed',
+     'Livestock pasture fed',
+     'Wastes & residues ',
+     'Bioenergy yields',
+     'Solid or liquid ',
+     'Surplus land forest & bioenergy',
+     'Land-use efficiency ',
+     'GGR1',
+     'GGR2',
+     'GGR3',
+     'GGR4',
+     'Emissions trajectory']
+
+
+
+## Creating a new generation
+
+
+```python
+def generate_chromosome(constraint = False, constraint_levers = [], constraint_values = [], 
+                        threshold = False, threshold_names = [], thresholds = []):
+    """
+    Initialises a chromosome and returns its corresponding lever values, and temperature and cost. 
+    Parameters:
+        - constraint (boolean): Flag to select whether any inputs have been fixed. 
+        - constraint_levers (list of strings): Contains the name of levers to be fixed.  
+        - constraint_values (list of floats): Contains the values to fix the selected levers to. 
+        - threshold (boolean): Flag to select whether any inputs have to be bounded within a range. 
+        - threshold_names (list of strings): Contains the name of the levers to be bounded within a range. 
+        - thresholds (list of lists of floats): Contains the upper and lower bound for each specified lever. 
+    Returns:
+        - random_lever_values (list of floats): Contains lever values corresponding to generated chromosome. 
+        - result (list): Contains temperature and cost values corresponding to the current chromosome. 
+    """
+    lever_names = list(dfs_3.iloc[:, 0].to_numpy()) # Create list with all lever names
+    # Generate random lever combination
+    random_lever_values = new_lever_combination(threshold = threshold, threshold_names = threshold_names, thresholds = thresholds) 
+    # Fix specified input levers
+    if constraint == True:
+        lever_names, random_lever_values = overwrite_lever_values(lever_names, random_lever_values, constraint_levers,  constraint_values)
+    result = move_lever(lever_names, random_lever_values, costs = True, constraint = constraint, constraint_levers = constraint_levers, constraint_values = constraint_values) # Move lever accordingly and read temperature and cost valuesw
+    return random_lever_values, result
+```
+
+## Fitness function
+
+
+```python
+def fitness(chromosome, target_temperature = 2850, target_cost = -3.5, output_constraint = False, current_output_values = [], output_constraint_names = [], output_constraints = [], std_devs = []):
+    """Need to apply some sort of normalisation. Divide by standard deviation"""
+    total_cost = 0 # Initialise fitness
+    lever_names = list(dfs_3.iloc[:, 0].to_numpy()) # Create list with all lever names
+    output_names = list(dfs.iloc[:, 0].to_numpy()) # Create list with all output names
+    if output_constraint == True: # If output constraints have been set, take into account in fitness function
+        for i in range(len(output_constraint_names)): # Iterate through output constraints
+            if output_constraint_names[i] in  output_names: # Ensure name is correct, otherwise ignore constraint
+                # Equality constraint of specified output value. Normalised by diving it by an estimate of its standard deviation. 
+                total_cost += (abs(current_output_values[output_names.index(output_constraint_names[i])] - output_constraints[i]))/std_devs[output_names.index(output_constraint_names[i])]
+    # Equality constraint for temperature value and inequality constraint for cost value (normalised with their approxiamte std dev)
+    total_cost += (abs(chromosome[0] - target_temperature)/18204.97) + (abs(chromosome[1] - target_cost)/34.59)
+    return  total_cost
+```
+
+## Selection
+
+
+```python
+def selection(fitness_values):
+    """Given an array of fitness values, find the indeces and the values of the 2 fittest candidates -> Parents"""
+    fittest_index = sorted(range(len(fitness_values)), key = lambda sub: fitness_values[sub])[:2] # Find 2 fittest candidates
+    parent_1, parent_2 = lever_values[fittest_index [0]], lever_values[fittest_index [1]] # Find values of parents
+    return parent_1, parent_2, fittest_index
+```
+
+## Mutation 
+
+
+```python
+def mutated_genes(lever_value, thresholds = [1, 3], threshold = False, threshold_name = "", threshold_value = ""):
+    """Mutate gene by randomly moving a lever up or down by 0.1. Returns the mutated gene (the new lever value)"""
+    move = -0.
+    prob = random.randint(0, 100)/100 # Generate random gene
+    if prob < 0.5: move = -0.1 # Move lever down
+    else: move = 0.1 # Move lever up
+    # If the lever value is out of bounds, reverse direction of step (taking specified threshold into account)
+    if threshold == True:
+        if (lever_value + move < threshold_value[0]) or (lever_value + move > threshold_value[1]):
+            move = -move
+    else:
+        if (lever_value + move < thresholds[0]) or (lever_value + move > thresholds[1]):
+            move = -move
+    return round(lever_value + move, 3)
+```
+
+## Crossover 
+
+
+```python
+def mate(parent_1, parent_2, threshold = False, threshold_name = "", threshold_value = ""): 
+        ''' Takes a couple of parents, performs crossover, and returns resulting child. '''
+        child_chromosome = [] 
+        for p1, p2 in zip(parent_1, parent_2):     
+            prob = random.random()  # Generate random value
+            if prob < 0.4: # Select gene from 1st parent
+                child_chromosome.append(p1) 
+            elif prob < 0.8: # Select gene from 2nd parent
+                child_chromosome.append(p2) 
+            elif prob < 0.9: 
+                child_chromosome.append(mutated_genes(p1, threshold = threshold, threshold_name = threshold_name, threshold_value = threshold_value))  # Mutate gene from 1st parent
+            else:
+                child_chromosome.append(mutated_genes(p2, threshold = threshold, threshold_name = threshold_name, threshold_value = threshold_value)) # Mutate gene from 2nd parent
+        return child_chromosome
+```
+
+## Setting multiple constraints
+
+### Setting input constraints
+
+
+```python
+def overwrite(levers, values, address = str(driver.current_url)):
+    """Given a set of lever names and corresponding values, overwrite specified lever combination"""
+    for i in range(len(levers)): # Overwrite 1 value at a time
+        address = new_URL(levers[i], values[i], address = address)  
+    return address
+
+def overwrite_lever_values(levers, values, constraint_levers, constraint_values):
+    """
+    Given a set of lever names and corresponding values, and a set of 
+    constrained lever names and their values, return the corresponding lever combination and its values. 
+    """
+    for i in range(len(levers)): # Iterate through all levers
+        if levers[i] in constraint_levers: # If current lever is constrained
+            values[i] = constraint_values[constraint_levers.index(levers[i])] # Update
+    return levers, values
+```
+
+### Setting output constraints
+
+
+```python
+def read_outputs():
+    """Reads all outputs and returns them as a list (empirical scraping)"""
+    time.sleep(0.2) 
+    compare_box = driver.find_element_by_xpath('//*[@id="mp-nav-compare"]') # Move to the "Compare" section
+    time.sleep(0.1)
+    try: 
+        compare_box.click()
+    except:
+        id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+        id_box.click()
+        time.sleep(0.1)
+        compare_box.click()
+    out_vals = []
+    for i in range(len(dfs)): 
+        userid_element = driver.find_element_by_xpath(dfs.iloc[i, 2])
+        out_vals.append(float(userid_element.text.rstrip("%")))
+    time.sleep(0.1)   
+    try:
+        driver.find_element_by_xpath('//*[@id="mn-1"]').click() 
+    except: # Problem going back to the overview section? The code below sorts it
+        time.sleep(0.2)
+        id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+        id_box.click()
+    return out_vals
+```
+
+### Finding standard deviation of each output - Normalisation of cost function values
+
+
+```python
+# Generate 20 random lever combinations and measure their standard deviation
+lever_values = []; output_values = []
+for i in range(20): # Generate 20 random lever combinations
+    random_lever_values = new_lever_combination() # Generate random lever combination
+    temp = move_lever(lever_names, random_lever_values, costs = True) # Move lever accordingly
+    if (temp[0] > 1000) and (temp[1]>-14): # Check for spurious values
+        lever_values.append(temp)
+        output_values.append(read_outputs())
+output_data = pd.DataFrame(np.array(output_values))
+std_devs = []
+for i in range(len(output_data.iloc[0, :])): # Read std dev of outputs corresponding to each lever combination
+    std_devs.append(output_data.iloc[:, i].std())
+```
+
+
+    ---------------------------------------------------------------------------
+
+    KeyboardInterrupt                         Traceback (most recent call last)
+
+    <ipython-input-402-988a9b3bbbdf> in <module>
+          3 for i in range(20): # Generate 20 random lever combinations
+          4     random_lever_values = new_lever_combination() # Generate random lever combination
+    ----> 5     temp = move_lever(lever_names, random_lever_values, costs = True) # Move lever accordingly
+          6     if (temp[0] > 1000) and (temp[1]>-14): # Check for spurious values
+          7         lever_values.append(temp)
+    
+
+    <ipython-input-394-fde486dd0c36> in move_lever(lever, value, costs, address, constraint, constraint_levers, constraint_values)
+         23 
+         24     # Open website corresponding to the input values
+    ---> 25     driver.get(address)
+         26 
+         27     ########################################## IMPORTANT ####################################################
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\selenium\webdriver\remote\webdriver.py in get(self, url)
+        331         Loads a web page in the current browser session.
+        332         """
+    --> 333         self.execute(Command.GET, {'url': url})
+        334 
+        335     @property
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\selenium\webdriver\remote\webdriver.py in execute(self, driver_command, params)
+        317 
+        318         params = self._wrap_value(params)
+    --> 319         response = self.command_executor.execute(driver_command, params)
+        320         if response:
+        321             self.error_handler.check_response(response)
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\selenium\webdriver\remote\remote_connection.py in execute(self, command, params)
+        372         data = utils.dump_json(params)
+        373         url = '%s%s' % (self._url, path)
+    --> 374         return self._request(command_info[0], url, body=data)
+        375 
+        376     def _request(self, method, url, body=None):
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\selenium\webdriver\remote\remote_connection.py in _request(self, method, url, body)
+        395 
+        396         if self.keep_alive:
+    --> 397             resp = self._conn.request(method, url, body=body, headers=headers)
+        398 
+        399             statuscode = resp.status
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\request.py in request(self, method, url, fields, headers, **urlopen_kw)
+         78         else:
+         79             return self.request_encode_body(
+    ---> 80                 method, url, fields=fields, headers=headers, **urlopen_kw
+         81             )
+         82 
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\request.py in request_encode_body(self, method, url, fields, headers, encode_multipart, multipart_boundary, **urlopen_kw)
+        169         extra_kw.update(urlopen_kw)
+        170 
+    --> 171         return self.urlopen(method, url, **extra_kw)
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\poolmanager.py in urlopen(self, method, url, redirect, **kw)
+        328             response = conn.urlopen(method, url, **kw)
+        329         else:
+    --> 330             response = conn.urlopen(method, u.request_uri, **kw)
+        331 
+        332         redirect_location = redirect and response.get_redirect_location()
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\connectionpool.py in urlopen(self, method, url, body, headers, retries, redirect, assert_same_host, timeout, pool_timeout, release_conn, chunked, body_pos, **response_kw)
+        670                 body=body,
+        671                 headers=headers,
+    --> 672                 chunked=chunked,
+        673             )
+        674 
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\connectionpool.py in _make_request(self, conn, method, url, timeout, chunked, **httplib_request_kw)
+        419                     # Python 3 (including for exceptions like SystemExit).
+        420                     # Otherwise it looks like a bug in the code.
+    --> 421                     six.raise_from(e, None)
+        422         except (SocketTimeout, BaseSSLError, SocketError) as e:
+        423             self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\packages\six.py in raise_from(value, from_value)
+    
+
+    C:\ProgramData\Anaconda3\lib\site-packages\urllib3\connectionpool.py in _make_request(self, conn, method, url, timeout, chunked, **httplib_request_kw)
+        414                 # Python 3
+        415                 try:
+    --> 416                     httplib_response = conn.getresponse()
+        417                 except BaseException as e:
+        418                     # Remove the TypeError from the exception chain in
+    
+
+    C:\ProgramData\Anaconda3\lib\http\client.py in getresponse(self)
+       1342         try:
+       1343             try:
+    -> 1344                 response.begin()
+       1345             except ConnectionError:
+       1346                 self.close()
+    
+
+    C:\ProgramData\Anaconda3\lib\http\client.py in begin(self)
+        304         # read until we get a non-100 response
+        305         while True:
+    --> 306             version, status, reason = self._read_status()
+        307             if status != CONTINUE:
+        308                 break
+    
+
+    C:\ProgramData\Anaconda3\lib\http\client.py in _read_status(self)
+        265 
+        266     def _read_status(self):
+    --> 267         line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+        268         if len(line) > _MAXLINE:
+        269             raise LineTooLong("status line")
+    
+
+    C:\ProgramData\Anaconda3\lib\socket.py in readinto(self, b)
+        587         while True:
+        588             try:
+    --> 589                 return self._sock.recv_into(b)
+        590             except timeout:
+        591                 self._timeout_occurred = True
+    
+
+    KeyboardInterrupt: 
+
+
+## Specify constraints and iterate
+
+
+```python
+# Specify input levers to fix
+constraint_lever_names = ['Electric & hydrogen',
+ 'Global population',
+ 'Wind',
+ 'Nuclear',
+ 'Solar']
+constraint_lever_values = [3, 2.0, 2.5, 1.0, 3.2]
+
+# Specify input levers to bound within a threshold
+threshold_names  = [ 'Calories consumed ',
+ 'Quantitiy of meat',
+ 'Type of meat ']
+thresholds = [[2.5, 3.0], [2.5, 3.0], [2.5, 3.0]]
+
+# Specify output constraints
+output_constraint_names = ['Total energy demand (EJ / year)', 'Forest area (native and commercial, millions of hectares']
+output_constraints = [420, 4100]
+```
+
+
+```python
+# Specify input levers to fix
+constraint_lever_names = ['CCS electricity', 
+'GGR1', 
+'GGR2', 
+'GGR3', 
+'GGR4']
+constraint_lever_values = [1, 1, 1, 1, 1]
+
+# Specify input levers to bound within a threshold
+threshold_names  = [ 'Solar', 
+                    'Wind',
+                    'Global population',
+ 'Electric & hydrogen',
+ 'CCS manufacturing',
+'Nuclear',
+'Calories consumed',
+ 'Quantitiy of meat',
+  'Type of meat',
+ 'Livestock grains/residues fed', 
+'Land-use efficiency']
+thresholds = [[2.6, 3.2], [2.5, 3.0], [1.6, 2.0], [2.8, 3.1], [1, 2], [1.5, 2], [2, 3], [2, 3], [2, 3], [1.8, 2.2], [1.8, 2.2]]
+
+# Specify output constraints
+#utput_constraint_names = ['Total energy demand (EJ / year)', 'Forest area (native and commercial, millions of hectares']
+#utput_constraints = [420, 4100]
+```
+
+
+```python
+palette = itertools.cycle(sns.color_palette(palette = "Paired", n_colors = 9))
+```
+
+
+```python
+# Run GA optimiser
+fitness_progress, lever_vals = iterate(iterations = 9, plot = True, population_size = 20, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  5.670242897334173
+    Temperature and cost values:  [3802, -4.37] ;  [3423, -0.57]
+    Parents:
+    [1.9, 2.2, 2.9, 3.0, 2.8, 2.8, 2.8, 2.1, 2.9, 2.5, 1.5, 1.8, 1.6, 2.3, 2.8, 2.6, 2.6, 2.0, 1.6, 2.8, 1.7, 2.0, 1, 1.9, 2.2, 1.5, 2.6, 1.7, 1.5, 3.2, 3.0, 2.7, 3.0, 2.7, 1.5, 3.0, 1.9, 2.7, 1.9, 2.1, 2.3, 1.5, 2.6, 1, 1, 1, 1, 1.7]
+    [2.0, 2.3, 2.2, 2.8, 2.6, 2.5, 1.5, 1.7, 3.0, 2.3, 2.1, 2.8, 1.5, 1.9, 2.3, 2.9, 1.8, 1.8, 2.6, 2.6, 2.2, 1.1, 1, 2.0, 3.0, 2.0, 2.6, 2.5, 1.5, 3.2, 2.9, 2.0, 2.7, 3.0, 3.0, 1.8, 2.1, 2.4, 2.8, 2.1, 3.0, 2.9, 2.2, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  2 ; Fitness is:  1.462300582401043
+    Temperature and cost values:  [3210, -4.01] ;  [3580, -3.62]
+    Parents:
+    [1.9, 2.3, 2.9, 3.0, 2.6, 2.5, 2.8, 1.7, 2.9, 2.5, 1.6, 1.9, 1.5, 1.9, 2.2, 2.9, 2.7, 2.0, 1.6, 2.8, 2.2, 2.0, 1, 2.0, 2.2, 2.0, 2.6, 1.7, 1.4, 3.2, 2.9, 2.7, 2.7, 3.0, 3.0, 3.0, 2.0, 2.3, 2.7, 2.1, 2.3, 2.9, 2.2, 1, 1, 1, 1, 2.1]
+    [2.0, 2.1, 2.2, 2.7, 2.7, 2.5, 2.8, 2.1, 3.0, 2.5, 1.5, 2.9, 1.6, 2.3, 2.3, 2.6, 2.6, 1.7, 1.6, 2.7, 1.7, 1.1, 1, 1.9, 3.0, 2.0, 2.7, 2.5, 1.5, 3.2, 3.0, 2.0, 3.0, 2.7, 1.5, 3.0, 1.9, 2.7, 2.8, 2.0, 3.0, 1.5, 2.2, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  3 ; Fitness is:  0.6675545232639337
+    Temperature and cost values:  [3020, -3.83] ;  [3052, -3.78]
+    Parents:
+    [2.0, 2.3, 2.2, 2.7, 2.6, 2.5, 2.8, 1.7, 3.0, 2.5, 1.5, 2.9, 1.5, 2.2, 2.2, 2.9, 2.8, 1.7, 1.6, 2.7, 1.7, 1.0, 1, 2.0, 3.0, 2.0, 2.7, 2.5, 1.4, 3.1, 3.0, 2.7, 2.7, 3.0, 3.0, 2.9, 2.0, 2.7, 2.8, 2.0, 2.3, 1.4, 2.2, 1, 1, 1, 1, 1.8]
+    [1.9, 2.3, 2.2, 2.7, 2.7, 2.5, 2.8, 1.7, 2.9, 2.5, 1.6, 2.9, 1.5, 2.3, 2.4, 2.9, 2.6, 1.7, 1.6, 2.8, 2.2, 2.0, 1, 2.1, 2.3, 2.0, 2.7, 2.5, 1.6, 3.2, 2.9, 2.0, 3.0, 3.0, 3.0, 3.0, 1.9, 2.7, 2.7, 2.0, 2.3, 1.5, 2.3, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  4 ; Fitness is:  0.38637274489033
+    Temperature and cost values:  [2977, -3.63] ;  [2966, -3.67]
+    Parents:
+    [2.0, 2.3, 2.1, 2.7, 2.6, 2.5, 2.7, 1.7, 2.9, 2.5, 1.6, 2.9, 1.5, 2.2, 2.2, 2.8, 2.9, 1.7, 1.6, 2.7, 2.2, 1.0, 1, 2.2, 2.9, 2.0, 2.6, 2.5, 1.6, 3.2, 3.0, 2.0, 2.9, 3.0, 3.0, 3.0, 1.9, 2.7, 2.9, 2.0, 2.2, 1.5, 2.2, 1, 1, 1, 1, 1.8]
+    [2.0, 2.2, 2.1, 2.6, 2.6, 2.5, 2.9, 1.7, 3.0, 2.5, 1.6, 2.9, 1.6, 2.2, 2.3, 2.9, 2.7, 1.7, 1.6, 2.8, 2.2, 2.0, 1, 2.1, 2.3, 2.1, 2.7, 2.6, 1.6, 3.2, 2.9, 2.7, 2.7, 3.0, 3.0, 3.0, 1.9, 2.7, 2.8, 1.9, 2.3, 1.4, 2.2, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  5 ; Fitness is:  1.1163830431576325
+    Temperature and cost values:  [2906, -3.59] ;  [2923, -3.76]
+    Parents:
+    [2.0, 2.2, 2.1, 2.6, 2.7, 2.5, 2.7, 1.8, 3.0, 2.5, 1.7, 2.9, 1.5, 2.2, 2.3, 2.9, 2.9, 1.6, 1.7, 2.9, 2.3, 2.0, 1, 2.2, 2.8, 2.1, 2.6, 2.5, 1.5, 3.2, 2.9, 2.0, 2.9, 2.9, 3.0, 2.9, 1.9, 2.8, 2.9, 2.0, 2.3, 1.5, 2.2, 1, 1, 1, 1, 1.8]
+    [2.0, 2.3, 2.2, 2.6, 2.6, 2.5, 2.9, 1.7, 2.9, 2.5, 1.6, 2.9, 1.6, 2.3, 2.2, 2.7, 2.7, 1.7, 1.6, 2.8, 2.2, 2.0, 1, 2.2, 2.9, 2.1, 2.7, 2.5, 1.6, 3.2, 3.0, 2.7, 2.7, 3.0, 3.0, 3.0, 1.9, 2.7, 2.8, 2.0, 2.2, 1.4, 2.2, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  6 ; Fitness is:  0.2567286675058426
+    Temperature and cost values:  [2842, -3.55] ;  [2849, -3.57]
+    Parents:
+    [2.0, 2.2, 2.2, 2.6, 2.6, 2.4, 2.8, 1.8, 3.0, 2.5, 1.6, 2.8, 1.7, 2.2, 2.1, 2.9, 3.0, 1.7, 1.6, 3.0, 2.3, 2.0, 1, 2.2, 2.8, 2.2, 2.6, 2.5, 1.4, 3.2, 2.9, 2.0, 2.9, 3.0, 3.0, 3.0, 1.9, 2.8, 2.7, 2.0, 2.3, 1.4, 2.1, 1, 1, 1, 1, 1.8]
+    [2.0, 2.3, 2.2, 2.6, 2.6, 2.5, 2.7, 1.8, 3.0, 2.6, 1.7, 2.9, 1.5, 2.4, 2.2, 2.9, 2.9, 1.7, 1.7, 2.9, 2.2, 2.0, 1, 2.2, 2.9, 2.1, 2.6, 2.5, 1.6, 3.1, 3.0, 2.1, 2.7, 3.0, 3.0, 2.9, 1.9, 2.8, 2.9, 2.0, 2.3, 1.5, 2.1, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  7 ; Fitness is:  0.15218625644619693
+    Temperature and cost values:  [2851, -3.44] ;  [2833, -3.47]
+    Parents:
+    [2.0, 2.3, 2.2, 2.6, 2.6, 2.5, 2.7, 1.8, 3.0, 2.5, 1.7, 2.8, 1.5, 2.4, 2.2, 2.9, 2.9, 1.6, 1.6, 3.0, 2.2, 2.0, 1, 2.1, 2.9, 2.1, 2.6, 2.5, 1.6, 3.1, 2.9, 2.1, 2.7, 3.0, 3.0, 2.9, 1.9, 2.8, 2.9, 2.0, 2.3, 1.5, 2.2, 1, 1, 1, 1, 1.9]
+    [2.0, 2.3, 2.2, 2.5, 2.6, 2.4, 2.7, 1.8, 3.0, 2.6, 1.6, 2.9, 1.5, 2.4, 2.2, 2.9, 3.0, 1.8, 1.5, 2.9, 2.2, 2.0, 1, 2.2, 2.8, 2.1, 2.6, 2.4, 1.4, 3.1, 2.9, 2.0, 3.0, 3.0, 3.0, 2.8, 1.8, 2.8, 2.9, 2.0, 2.3, 1.4, 2.0, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  8 ; Fitness is:  0.14346718216650817
+    Temperature and cost values:  [2842, -3.51] ;  [2832, -3.49]
+    Parents:
+    [2.0, 2.3, 2.2, 2.6, 2.6, 2.4, 2.7, 1.8, 3.0, 2.6, 1.7, 2.9, 1.5, 2.4, 2.2, 2.9, 3.0, 1.6, 1.4, 2.9, 2.2, 2.0, 1, 2.2, 2.9, 2.1, 2.6, 2.5, 1.6, 3.1, 2.9, 2.1, 2.7, 3.0, 2.9, 2.9, 1.9, 2.8, 2.9, 2.0, 2.4, 1.5, 2.2, 1, 1, 1, 1, 1.8]
+    [2.0, 2.3, 2.2, 2.7, 2.6, 2.4, 2.7, 1.8, 3.0, 2.6, 1.6, 2.8, 1.5, 2.4, 2.1, 2.9, 2.9, 1.6, 1.6, 2.9, 2.2, 2.0, 1, 2.2, 2.9, 2.1, 2.6, 2.4, 1.7, 3.1, 2.9, 2.0, 2.8, 3.0, 2.9, 2.9, 1.9, 2.8, 2.9, 2.0, 2.3, 1.4, 2.2, 1, 1, 1, 1, 1.8] 
+    
+    Generation:  9 ; Fitness is:  0.16811875632277545
+    Temperature and cost values:  [2841, -3.49] ;  [2858, -3.46]
+    Parents:
+    [2.0, 2.3, 2.2, 2.6, 2.5, 2.4, 2.8, 1.8, 3.0, 2.6, 1.6, 2.9, 1.5, 2.4, 2.2, 2.9, 3.0, 1.6, 1.4, 2.9, 2.2, 2.1, 1, 2.2, 2.9, 2.1, 2.6, 2.5, 1.6, 3.1, 2.9, 2.0, 2.7, 3.0, 2.9, 2.9, 1.9, 2.8, 2.9, 2.0, 2.4, 1.5, 2.2, 1, 1, 1, 1, 1.8]
+    [2.0, 2.3, 2.2, 2.7, 2.6, 2.4, 2.7, 1.8, 3.0, 2.6, 1.7, 2.8, 1.5, 2.5, 2.1, 2.9, 3.0, 1.6, 1.6, 2.9, 2.2, 2.0, 1, 2.2, 2.9, 2.1, 2.5, 2.5, 1.6, 3.1, 2.9, 2.0, 2.8, 3.0, 2.9, 2.9, 1.9, 2.8, 2.9, 1.9, 2.3, 1.6, 2.3, 1, 1, 1, 1, 1.9] 
+    
+    
+
+
+![png](output_42_1.png)
+
+
+
+```python
+temp_fitness_progress = fitness_progress.copy()
+plt.plot(fitness_progress)
+
+```
+
+
+
+
+    [<matplotlib.lines.Line2D at 0x245280628c8>]
+
+
+
+
+![png](output_43_1.png)
+
+
+
+```python
+temp_fitness_progress[-1] = temp_fitness_progress[-2]
+```
+
+
+```python
+plt.figure(figsize = (12, 7))
+plt.title("Cost as a function of generations", fontsize = 16)
+plt.xlabel("Generation", fontsize = 16)
+plt.ylabel("Cost", fontsize = 16)
+plt.plot(temp_fitness_progress, '-o')
+```
+
+
+
+
+    [<matplotlib.lines.Line2D at 0x245282d81c8>]
+
+
+
+
+![png](output_45_1.png)
+
+
+
+```python
+sum([24.479890199843794, 21.14510860014707, 20.834078200161457, 26.836458100005984, 19.850726699922234, 20.128235899843276])/24
+```
+
+
+
+
+    5.553104070830159
+
+
+
+
+```python
+mu = 5.55
+sigma = 0.2
+plt.hist(np.random.normal(mu, sigma, 1000), bins = 10)
+```
+
+
+
+
+    (array([ 17.,  42., 120., 207., 231., 204., 127.,  38.,  10.,   4.]),
+     array([5.01290111, 5.13303352, 5.25316593, 5.37329834, 5.49343075,
+            5.61356316, 5.73369557, 5.85382798, 5.97396039, 6.0940928 ,
+            6.21422521]),
+     <a list of 10 Patch objects>)
+
+
+
+
+![png](output_47_1.png)
+
+
+
+```python
+# time as a function of iterations 
+# generation size * times (+noise)
+size = 40
+iterations = 10
+plt.figure(figsize = (12, 7))
+for size in [5, 10, 20, 40]:
+    total_time = []
+    for j in range(iterations):
+        temp_time = 0
+        for i in range(size):
+            temp_time +=  float(np.random.normal(mu, sigma, 1))
+        total_time.append(temp_time)
+    plt.plot(np.cumsum(total_time))
+plt.title("Time per generation - Different population sizes", fontsize = 17)
+plt.xlabel("Generation number", fontsize = 16)
+plt.ylabel("Time (s)", fontsize = 16)
+plt.legend(["5 lever combinations per generation", "10 lever combinations per generation", "20 lever combinations per generation", "40 lever combinations per generation"])
+```
+
+
+
+
+    <matplotlib.legend.Legend at 0x2113530c8c8>
+
+
+
+
+![png](output_48_1.png)
+
+
+
+```python
+fitness_progress_10, lever_vals = iterate(iterations = 10, plot = True, population_size = 10, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  2.6572756336140015
+    Temperature and cost values:  [3727, -3.68] ;  [4428, -2.46]
+    Parents:
+    [1.8, 2.4, 2.3, 3.0, 3.0, 2.1, 2.8, 1.5, 3.0, 2.6, 2.9, 3.0, 2.9, 2.2, 2.8, 2.0, 2.6, 2.5, 2.2, 1.7, 1.9, 1.7, 1, 2.6, 2.9, 1.8, 3.0, 2.2, 2.4, 3.1, 2.6, 2.0, 1.9, 2.8, 1.8, 2.2, 2.2, 2.6, 1.9, 2.2, 2.0, 2.3, 2.7, 1, 1, 1, 1, 2.5]
+    [2.0, 2.0, 2.7, 2.6, 2.2, 2.7, 2.8, 2.8, 3.0, 1.9, 2.2, 2.2, 2.4, 1.5, 1.5, 1.6, 2.7, 2.9, 2.0, 2.7, 2.1, 1.1, 1, 2.2, 1.7, 1.5, 2.7, 2.5, 2.7, 2.9, 1.6, 1.9, 2.1, 2.8, 2.7, 1.9, 1.9, 2.1, 1.9, 1.8, 2.7, 2.6, 2.2, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  2 ; Fitness is:  0.8856818593865416
+    Temperature and cost values:  [3676, -3.51] ;  [3380, -4.22]
+    Parents:
+    [2.0, 2.0, 2.7, 2.6, 2.9, 2.1, 2.8, 1.4, 3.0, 1.9, 2.2, 3.0, 2.4, 1.5, 2.8, 1.6, 2.7, 2.5, 1.9, 1.7, 1.9, 1.1, 1, 2.6, 2.9, 1.8, 2.7, 2.2, 2.5, 3.1, 2.6, 2.0, 2.1, 2.8, 2.7, 2.2, 1.9, 2.1, 1.9, 2.2, 2.0, 2.3, 2.7, 1, 1, 1, 1, 2.9]
+    [2.0, 2.0, 2.7, 3.0, 3.0, 2.7, 2.8, 1.5, 3.0, 1.9, 2.8, 2.1, 2.4, 1.5, 2.8, 2.0, 2.8, 2.6, 2.0, 2.7, 2.0, 1.7, 1, 2.6, 2.8, 1.8, 3.0, 2.5, 2.7, 3.1, 1.6, 1.9, 1.9, 2.9, 2.7, 1.9, 2.2, 2.1, 1.9, 2.2, 2.0, 2.3, 2.2, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  3 ; Fitness is:  0.541917690883393
+    Temperature and cost values:  [3369, -3.81] ;  [3411, -3.78]
+    Parents:
+    [2.0, 2.0, 2.7, 2.9, 2.8, 2.7, 2.8, 1.5, 3.0, 1.9, 2.3, 2.1, 2.4, 1.5, 2.8, 2.0, 2.8, 2.6, 1.9, 2.7, 2.0, 1.6, 1, 2.7, 2.8, 1.8, 2.9, 2.5, 2.5, 3.1, 2.6, 1.9, 2.1, 2.9, 2.8, 2.0, 1.9, 2.2, 2.0, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 2.9]
+    [2.0, 2.0, 2.7, 2.6, 3.0, 2.1, 2.7, 1.3, 3.0, 1.9, 2.8, 3.0, 2.4, 1.5, 2.8, 2.0, 2.7, 2.5, 1.9, 2.7, 2.0, 1.7, 1, 2.6, 2.9, 1.8, 3.0, 2.5, 2.7, 3.0, 2.6, 1.9, 2.1, 2.9, 2.7, 1.9, 2.3, 2.1, 1.9, 2.2, 2.1, 2.3, 2.2, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  4 ; Fitness is:  0.48831108307773735
+    Temperature and cost values:  [3218, -3.9] ;  [3316, -3.84]
+    Parents:
+    [2.0, 2.0, 2.7, 2.6, 3.0, 2.1, 2.7, 1.5, 3.0, 2.0, 2.8, 3.0, 2.4, 1.5, 2.8, 2.0, 2.7, 2.5, 1.9, 2.7, 1.9, 1.7, 1, 2.7, 2.8, 1.8, 2.9, 2.6, 2.5, 3.0, 2.6, 1.9, 2.1, 2.9, 2.7, 2.0, 2.4, 2.2, 2.1, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 3.0]
+    [2.0, 2.0, 2.7, 2.6, 3.0, 2.1, 2.7, 1.4, 3.0, 2.0, 2.8, 3.0, 2.4, 1.5, 2.8, 1.9, 2.7, 2.6, 1.9, 2.7, 2.0, 1.6, 1, 2.7, 2.9, 1.8, 2.9, 2.5, 2.7, 3.0, 2.6, 1.9, 2.1, 2.9, 2.7, 2.0, 2.3, 2.2, 1.9, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  5 ; Fitness is:  0.36051863130247885
+    Temperature and cost values:  [3234, -3.77] ;  [3220, -3.88]
+    Parents:
+    [2.0, 2.0, 2.7, 2.6, 3.0, 2.1, 2.7, 1.5, 3.0, 2.0, 2.8, 2.9, 2.4, 1.5, 2.8, 1.9, 2.7, 2.6, 1.9, 2.8, 2.0, 1.6, 1, 2.7, 2.9, 1.8, 2.9, 2.6, 2.8, 3.0, 2.6, 1.9, 2.1, 3.0, 2.7, 1.9, 2.4, 2.1, 1.9, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 3.0]
+    [2.0, 2.0, 2.7, 2.6, 3.0, 2.1, 2.7, 1.4, 3.0, 2.0, 2.8, 3.0, 2.5, 1.5, 2.8, 2.0, 2.7, 2.5, 1.9, 2.7, 1.9, 1.6, 1, 2.7, 2.8, 1.8, 2.9, 2.6, 2.7, 3.0, 2.6, 1.9, 2.1, 2.9, 2.7, 2.0, 2.5, 2.2, 2.2, 2.1, 2.1, 2.4, 2.2, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  6 ; Fitness is:  0.31680031789774316
+    Temperature and cost values:  [3267, -3.47] ;  [3202, -3.78]
+    Parents:
+    [2.0, 2.0, 2.7, 2.5, 3.0, 2.1, 2.6, 1.4, 3.0, 2.0, 2.8, 2.9, 2.3, 1.6, 2.8, 1.9, 2.7, 2.5, 1.9, 2.7, 2.0, 1.6, 1, 2.7, 2.9, 1.8, 2.9, 2.6, 2.9, 3.0, 2.6, 1.8, 2.1, 3.0, 2.8, 1.9, 2.4, 2.1, 1.8, 2.1, 2.2, 2.4, 2.2, 1, 1, 1, 1, 3.0]
+    [2.0, 1.9, 2.7, 2.5, 3.1, 2.0, 2.7, 1.4, 2.9, 1.9, 2.8, 3.0, 2.5, 1.5, 2.8, 1.8, 2.7, 2.6, 1.8, 2.7, 2.0, 1.7, 1, 2.7, 2.8, 1.8, 2.9, 2.6, 2.8, 3.0, 2.6, 1.9, 2.1, 3.0, 2.6, 2.0, 2.5, 2.1, 2.2, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  7 ; Fitness is:  0.27630582003147547
+    Temperature and cost values:  [3189, -3.65] ;  [3237, -3.42]
+    Parents:
+    [2.0, 2.0, 2.7, 2.5, 3.1, 2.1, 2.6, 1.4, 3.0, 1.9, 2.8, 2.9, 2.5, 1.5, 2.8, 1.9, 2.8, 2.5, 1.8, 2.7, 2.0, 1.6, 1, 2.6, 2.9, 1.8, 2.8, 2.6, 2.8, 3.0, 2.6, 1.8, 2.1, 3.0, 2.8, 1.9, 2.6, 2.1, 2.2, 2.1, 2.2, 2.5, 2.1, 1, 1, 1, 1, 2.9]
+    [2.0, 1.9, 2.7, 2.5, 2.9, 2.1, 2.6, 1.3, 2.9, 2.0, 2.9, 2.9, 2.3, 1.6, 2.8, 1.9, 2.8, 2.6, 1.9, 2.7, 2.0, 1.7, 1, 2.7, 2.8, 1.8, 2.9, 2.6, 2.9, 3.0, 2.6, 1.9, 2.0, 2.9, 2.7, 2.0, 2.6, 2.1, 2.3, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  8 ; Fitness is:  0.2782308905700228
+    Temperature and cost values:  [3111, -3.68] ;  [3183, -3.42]
+    Parents:
+    [2.1, 1.9, 2.7, 2.4, 3.1, 2.1, 2.6, 1.3, 3.0, 1.9, 2.8, 2.9, 2.3, 1.6, 2.8, 1.9, 2.8, 2.5, 1.8, 2.7, 2.0, 1.7, 1, 2.7, 2.9, 1.8, 2.9, 2.6, 2.9, 3.0, 2.6, 1.9, 2.0, 3.0, 2.8, 2.0, 2.6, 2.1, 2.2, 2.1, 2.1, 2.4, 2.2, 1, 1, 1, 1, 2.9]
+    [2.0, 2.0, 2.7, 2.5, 2.9, 2.1, 2.6, 1.4, 2.9, 2.0, 2.8, 2.8, 2.5, 1.6, 2.8, 1.9, 2.8, 2.5, 1.9, 2.7, 2.0, 1.6, 1, 2.7, 2.8, 1.7, 2.9, 2.6, 2.8, 3.0, 2.6, 1.9, 2.0, 3.0, 2.8, 1.9, 2.7, 2.1, 2.3, 2.2, 2.2, 2.4, 2.2, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  9 ; Fitness is:  0.2272621637434561
+    Temperature and cost values:  [3082, -3.6] ;  [3093, -3.41]
+    Parents:
+    [2.2, 1.9, 2.7, 2.4, 2.9, 2.0, 2.6, 1.4, 2.9, 2.0, 2.7, 2.8, 2.5, 1.6, 2.8, 1.9, 2.8, 2.5, 1.7, 2.7, 2.0, 1.7, 1, 2.7, 2.9, 1.8, 2.9, 2.6, 2.9, 3.0, 2.6, 1.9, 2.0, 3.0, 2.8, 1.9, 2.8, 2.1, 2.2, 2.1, 2.1, 2.5, 2.2, 1, 1, 1, 1, 2.9]
+    [2.0, 1.9, 2.7, 2.4, 2.9, 2.1, 2.7, 1.3, 3.0, 2.0, 2.9, 2.9, 2.5, 1.6, 2.8, 1.9, 2.9, 2.5, 1.8, 2.7, 2.0, 1.7, 1, 2.8, 2.9, 1.7, 2.9, 2.7, 2.7, 2.9, 2.6, 2.0, 2.0, 3.0, 2.8, 1.9, 2.8, 2.2, 2.2, 2.2, 2.1, 2.4, 2.2, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  10 ; Fitness is:  0.1992447864473611
+    Temperature and cost values:  [3022, -3.57] ;  [3064, -3.46]
+    Parents:
+    [2.2, 1.9, 2.7, 2.4, 2.9, 2.0, 2.6, 1.5, 3.0, 2.0, 2.7, 2.9, 2.5, 1.6, 2.8, 1.9, 2.9, 2.5, 1.7, 2.6, 2.0, 1.7, 1, 2.8, 2.9, 1.8, 2.9, 2.6, 2.7, 2.9, 2.5, 2.0, 1.9, 3.0, 2.7, 1.9, 2.8, 2.1, 2.2, 2.3, 2.1, 2.4, 2.2, 1, 1, 1, 1, 3.0]
+    [2.2, 1.9, 2.7, 2.4, 2.9, 2.0, 2.6, 1.4, 3.0, 2.0, 2.7, 2.8, 2.5, 1.6, 2.8, 1.9, 2.9, 2.5, 1.8, 2.8, 2.0, 1.7, 1, 2.7, 2.9, 1.8, 2.9, 2.6, 2.7, 3.0, 2.6, 1.9, 2.0, 2.9, 2.8, 1.9, 2.9, 2.2, 2.2, 2.1, 2.0, 2.5, 2.2, 1, 1, 1, 1, 3.0] 
+    
+    
+
+
+![png](output_49_1.png)
+
+
+
+```python
+fitness_progress_20, lever_vals = iterate(iterations = 10, plot = True, population_size = 10, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  2.179995458997954
+    Temperature and cost values:  [3627, 0.49] ;  [4286, -0.08]
+    Parents:
+    [2.0, 2.7, 2.2, 2.2, 1.5, 1.9, 2.6, 2.5, 3.1, 3.0, 2.7, 1.5, 1.6, 3.0, 2.6, 2.7, 2.6, 1.5, 2.6, 2.7, 2.9, 2.0, 1, 2.3, 2.9, 1.5, 2.9, 1.7, 3.0, 2.9, 2.3, 2.2, 2.6, 2.5, 2.0, 2.7, 2.0, 2.2, 3.0, 2.4, 1.8, 2.4, 2.5, 1, 1, 1, 1, 2.4]
+    [2.0, 2.1, 1.8, 3.0, 1.5, 1.5, 2.7, 2.8, 2.9, 2.5, 2.4, 2.8, 2.4, 2.3, 1.6, 2.7, 1.8, 1.6, 2.5, 1.5, 1.6, 1.2, 1, 3.0, 1.5, 1.8, 2.6, 1.8, 2.9, 2.6, 2.8, 2.6, 1.6, 2.8, 2.0, 2.9, 2.0, 2.4, 2.1, 2.7, 1.7, 2.3, 2.7, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  2 ; Fitness is:  1.7945405707090691
+    Temperature and cost values:  [3664, -0.8] ;  [3808, -0.22]
+    Parents:
+    [2.0, 2.7, 2.2, 3.0, 1.5, 1.9, 2.6, 2.8, 2.9, 3.0, 2.7, 1.5, 2.4, 2.3, 1.6, 2.8, 1.8, 1.4, 2.5, 2.8, 2.9, 1.2, 1, 2.3, 3.0, 1.5, 2.9, 1.7, 2.9, 2.6, 2.3, 2.6, 2.6, 2.9, 2.1, 2.7, 2.0, 2.3, 2.1, 2.8, 1.7, 2.4, 2.6, 1, 1, 1, 1, 2.9]
+    [2.0, 2.7, 2.2, 2.2, 1.5, 2.0, 2.7, 2.5, 2.9, 3.0, 2.7, 1.5, 1.6, 3.0, 1.6, 2.7, 2.6, 1.6, 2.6, 2.7, 2.9, 2.0, 1, 3.0, 2.9, 1.8, 2.6, 1.7, 2.9, 2.7, 2.3, 2.6, 1.6, 2.5, 1.9, 2.6, 2.1, 2.4, 2.9, 2.7, 1.7, 2.3, 2.8, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  3 ; Fitness is:  1.3547664456861368
+    Temperature and cost values:  [3453, -1.3] ;  [3201, -0.53]
+    Parents:
+    [2.0, 2.8, 2.2, 3.0, 1.5, 2.0, 2.6, 2.5, 2.9, 3.0, 2.6, 1.5, 1.6, 2.3, 1.6, 2.8, 2.6, 1.4, 2.6, 2.8, 2.9, 2.0, 1, 2.3, 2.9, 1.8, 3.0, 1.6, 2.9, 2.6, 2.4, 2.6, 1.6, 2.9, 2.0, 2.6, 2.1, 2.3, 2.2, 2.8, 1.6, 2.4, 2.8, 1, 1, 1, 1, 2.9]
+    [2.1, 2.7, 2.2, 2.2, 1.6, 2.0, 2.6, 2.9, 2.9, 3.0, 2.7, 1.5, 2.4, 2.9, 1.6, 2.8, 2.6, 1.6, 2.6, 2.7, 2.9, 2.0, 1, 2.3, 3.0, 1.6, 2.6, 1.7, 3.0, 2.8, 2.4, 2.6, 1.7, 2.9, 1.9, 2.6, 2.0, 2.5, 2.9, 2.8, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  4 ; Fitness is:  2.3805391116121393
+    Temperature and cost values:  [3172, -1.25] ;  [3204, -1.19]
+    Parents:
+    [2.0, 2.7, 2.2, 3.1, 1.6, 2.0, 2.6, 2.9, 2.9, 3.0, 2.8, 1.5, 1.7, 2.4, 1.6, 2.8, 2.5, 1.5, 2.6, 2.8, 2.8, 2.0, 1, 2.2, 3.0, 1.6, 2.6, 1.7, 3.0, 2.9, 2.4, 2.6, 1.7, 3.0, 2.0, 2.5, 2.1, 2.5, 2.9, 2.8, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.8]
+    [2.1, 2.8, 2.3, 3.0, 1.6, 2.0, 2.6, 2.5, 2.9, 3.0, 2.6, 1.5, 2.4, 2.9, 1.5, 2.8, 2.6, 1.6, 2.6, 2.7, 2.9, 2.0, 1, 2.3, 2.9, 1.8, 3.0, 1.6, 2.9, 2.8, 2.4, 2.6, 1.5, 2.9, 1.9, 2.6, 2.1, 2.3, 2.9, 2.8, 1.6, 2.4, 2.8, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  5 ; Fitness is:  2.246600680832256
+    Temperature and cost values:  [3108, -1.35] ;  [3227, -1.54]
+    Parents:
+    [2.1, 2.7, 2.2, 3.0, 1.6, 2.0, 2.6, 2.9, 2.9, 2.9, 2.6, 1.5, 1.7, 2.4, 1.5, 2.8, 2.6, 1.5, 2.6, 2.8, 2.9, 2.1, 1, 2.3, 2.9, 1.6, 3.0, 1.6, 2.9, 2.9, 2.4, 2.6, 1.6, 3.0, 2.0, 2.6, 2.1, 2.3, 2.9, 2.9, 1.6, 2.4, 2.8, 1, 1, 1, 1, 2.9]
+    [2.0, 2.8, 2.2, 3.0, 1.6, 2.1, 2.7, 2.9, 2.9, 3.0, 2.8, 1.5, 1.6, 2.5, 1.6, 2.7, 2.6, 1.5, 2.6, 2.8, 2.9, 2.0, 1, 2.2, 2.9, 1.6, 2.9, 1.7, 2.8, 2.9, 2.4, 2.6, 1.5, 2.9, 1.9, 2.5, 2.1, 2.3, 2.9, 2.8, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  6 ; Fitness is:  2.102416535519414
+    Temperature and cost values:  [3005, -1.82] ;  [3096, -1.6]
+    Parents:
+    [2.2, 2.8, 2.2, 2.9, 1.6, 2.1, 2.7, 2.8, 2.9, 2.8, 2.9, 1.5, 1.8, 2.5, 1.7, 2.9, 2.5, 1.5, 2.5, 2.8, 2.9, 2.1, 1, 2.2, 3.0, 1.6, 3.0, 1.7, 3.0, 2.9, 2.4, 2.6, 1.6, 3.0, 2.0, 2.6, 2.1, 2.3, 2.9, 2.9, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.9]
+    [2.1, 2.9, 2.2, 2.9, 1.5, 1.9, 2.7, 2.9, 2.8, 3.0, 2.7, 1.5, 1.7, 2.4, 1.6, 2.7, 2.6, 1.5, 2.6, 2.8, 2.9, 2.0, 1, 2.2, 2.9, 1.6, 2.9, 1.7, 2.7, 3.0, 2.4, 2.6, 1.5, 3.0, 1.9, 2.6, 2.1, 2.3, 3.0, 3.0, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  7 ; Fitness is:  2.0090972671512763
+    Temperature and cost values:  [3040, -2.03] ;  [3007, -1.93]
+    Parents:
+    [2.2, 2.9, 2.2, 2.9, 1.5, 2.1, 2.7, 2.8, 2.9, 3.0, 2.7, 1.5, 1.7, 2.4, 1.7, 2.9, 2.6, 1.5, 2.6, 2.8, 2.9, 2.1, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.0, 2.9, 2.4, 2.7, 1.5, 3.0, 1.9, 2.7, 2.1, 2.3, 2.9, 2.8, 1.7, 2.5, 2.8, 1, 1, 1, 1, 2.8]
+    [2.2, 2.9, 2.2, 2.8, 1.6, 2.1, 2.7, 2.9, 2.8, 2.8, 2.7, 1.5, 1.8, 2.5, 1.6, 2.7, 2.6, 1.4, 2.5, 2.9, 2.9, 2.0, 1, 2.2, 2.9, 1.6, 3.0, 1.7, 3.1, 2.9, 2.3, 2.6, 1.5, 3.0, 2.0, 2.6, 2.1, 2.2, 3.0, 3.0, 1.7, 2.4, 2.9, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  8 ; Fitness is:  1.9391170849447654
+    Temperature and cost values:  [2969, -2.2] ;  [3028, -2.17]
+    Parents:
+    [2.2, 2.9, 2.2, 2.8, 1.6, 2.2, 2.7, 2.9, 2.8, 2.9, 2.7, 1.6, 1.8, 2.5, 1.7, 2.7, 2.6, 1.5, 2.5, 2.8, 2.9, 2.2, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.1, 3.0, 2.4, 2.8, 1.4, 3.0, 1.9, 2.7, 2.1, 2.2, 3.0, 3.0, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.8]
+    [2.3, 2.9, 2.2, 2.9, 1.5, 2.2, 2.7, 2.9, 2.8, 2.9, 2.7, 1.5, 1.7, 2.4, 1.7, 2.7, 2.6, 1.4, 2.6, 2.8, 2.9, 2.0, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.0, 2.9, 2.4, 2.6, 1.5, 3.0, 2.0, 2.6, 2.1, 2.3, 3.0, 3.0, 1.7, 2.5, 2.8, 1, 1, 1, 1, 2.7] 
+    
+    Generation:  9 ; Fitness is:  1.862820211794846
+    Temperature and cost values:  [2978, -2.37] ;  [2968, -2.3]
+    Parents:
+    [2.3, 2.9, 2.2, 2.9, 1.6, 2.3, 2.7, 2.9, 2.8, 2.9, 2.7, 1.6, 1.9, 2.5, 1.7, 2.8, 2.6, 1.4, 2.5, 2.8, 2.9, 2.0, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.0, 3.0, 2.4, 2.6, 1.6, 3.0, 1.9, 2.7, 2.1, 2.3, 2.9, 3.0, 1.8, 2.4, 2.9, 1, 1, 1, 1, 2.7]
+    [2.3, 2.9, 2.2, 2.9, 1.6, 2.2, 2.7, 2.9, 2.8, 2.9, 2.7, 1.6, 1.8, 2.4, 1.7, 2.6, 2.6, 1.4, 2.5, 2.8, 2.9, 2.2, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.1, 2.9, 2.4, 2.6, 1.5, 3.0, 2.0, 2.7, 2.1, 2.3, 3.0, 2.9, 1.7, 2.4, 2.8, 1, 1, 1, 1, 2.7] 
+    
+    Generation:  10 ; Fitness is:  1.8789807838316284
+    Temperature and cost values:  [2962, -2.63] ;  [2909, -2.38]
+    Parents:
+    [2.3, 3.0, 2.2, 2.9, 1.7, 2.2, 2.7, 2.9, 2.8, 2.9, 2.8, 1.5, 1.9, 2.4, 1.7, 2.8, 2.7, 1.4, 2.5, 2.8, 3.0, 2.0, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.1, 2.9, 2.4, 2.6, 1.5, 3.0, 1.9, 2.7, 2.1, 2.3, 3.0, 2.9, 1.7, 2.3, 2.8, 1, 1, 1, 1, 2.7]
+    [2.3, 3.0, 2.2, 2.9, 1.6, 2.3, 2.7, 2.9, 2.8, 3.0, 2.8, 1.6, 1.9, 2.5, 1.7, 2.6, 2.6, 1.4, 2.5, 2.8, 2.9, 2.2, 1, 2.2, 3.0, 1.6, 2.9, 1.7, 3.1, 3.0, 2.4, 2.6, 1.6, 3.0, 1.9, 2.7, 2.1, 2.2, 3.0, 3.1, 1.8, 2.4, 2.9, 1, 1, 1, 1, 2.7] 
+    
+    
+
+
+![png](output_50_1.png)
+
+
+
+```python
+fitness_progress_200, lever_vals = iterate(iterations = 10, plot = True, population_size = 20, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  5.111697009569211
+    Temperature and cost values:  [4496, -1.65] ;  [5341, -2.4]
+    Parents:
+    [1.7, 2.4, 2.1, 2.6, 1.9, 2.5, 2.7, 1.8, 3.1, 3.0, 2.7, 2.7, 2.7, 1.8, 2.3, 2.2, 2.5, 1.5, 2.0, 2.8, 2.0, 1.2, 1, 1.8, 2.3, 1.7, 3.0, 3.0, 1.8, 2.7, 2.9, 1.9, 1.6, 2.6, 1.6, 2.0, 2.1, 1.7, 2.9, 2.1, 2.9, 3.0, 2.3, 1, 1, 1, 1, 2.2]
+    [1.8, 2.1, 2.2, 1.9, 3.0, 2.5, 2.1, 2.0, 2.8, 2.8, 1.7, 2.3, 2.8, 1.7, 2.6, 2.6, 2.6, 2.0, 1.8, 1.6, 2.2, 1.6, 1, 1.7, 2.0, 2.0, 2.5, 2.2, 1.7, 2.8, 2.3, 2.5, 2.6, 2.5, 1.8, 3.0, 1.9, 1.7, 1.5, 2.6, 1.7, 2.8, 2.6, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  2 ; Fitness is:  3.5060135697025445
+    Temperature and cost values:  [3963, -2.66] ;  [4293, -3.91]
+    Parents:
+    [1.8, 2.3, 2.3, 2.7, 3.0, 2.5, 2.1, 1.8, 2.8, 2.8, 1.6, 2.3, 2.8, 1.8, 2.2, 2.3, 2.6, 2.0, 1.9, 2.8, 2.2, 1.3, 1, 1.7, 2.0, 1.7, 3.0, 2.3, 1.8, 2.7, 2.9, 1.8, 2.6, 2.5, 1.8, 3.0, 1.9, 1.8, 2.8, 2.1, 2.9, 2.8, 2.3, 1, 1, 1, 1, 2.6]
+    [1.8, 2.4, 2.2, 1.9, 3.0, 2.5, 2.7, 2.0, 2.8, 2.7, 1.7, 2.7, 2.8, 1.7, 2.6, 2.2, 2.5, 2.1, 2.1, 2.7, 2.2, 1.6, 1, 1.8, 2.0, 1.7, 2.5, 3.0, 1.7, 2.7, 2.3, 2.5, 2.6, 2.5, 1.6, 1.9, 2.1, 1.7, 2.9, 2.6, 2.8, 2.9, 2.3, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  3 ; Fitness is:  1.785370840826766
+    Temperature and cost values:  [3839, -3.63] ;  [4077, -3.34]
+    Parents:
+    [1.8, 2.2, 2.2, 1.9, 3.0, 2.5, 2.7, 1.8, 2.9, 2.7, 1.7, 2.7, 2.7, 1.7, 2.6, 2.2, 2.6, 2.1, 2.0, 2.9, 2.2, 1.3, 1, 1.8, 2.0, 1.7, 3.0, 2.3, 1.8, 2.7, 2.3, 2.5, 2.6, 2.5, 1.6, 3.0, 2.0, 1.7, 3.0, 2.1, 2.8, 2.9, 2.3, 1, 1, 1, 1, 2.6]
+    [1.8, 2.4, 2.3, 1.9, 3.0, 2.5, 2.6, 2.0, 2.8, 2.7, 1.7, 2.3, 2.8, 1.7, 2.6, 2.1, 2.6, 2.1, 1.9, 2.7, 2.2, 1.6, 1, 1.8, 2.0, 1.8, 3.0, 3.0, 1.7, 2.8, 2.9, 2.5, 2.6, 2.5, 1.6, 1.9, 2.1, 1.8, 2.9, 2.6, 2.8, 2.8, 2.3, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  4 ; Fitness is:  1.416970787137473
+    Temperature and cost values:  [3757, -3.39] ;  [3712, -3.86]
+    Parents:
+    [1.8, 2.4, 2.2, 1.9, 3.0, 2.5, 2.6, 2.1, 2.8, 2.7, 1.7, 2.3, 2.7, 1.7, 2.6, 2.1, 2.6, 2.1, 2.1, 2.7, 2.1, 1.3, 1, 1.8, 1.9, 1.8, 3.0, 2.4, 1.7, 2.7, 2.9, 2.5, 2.6, 2.5, 1.6, 3.0, 2.0, 1.8, 3.0, 2.1, 2.8, 2.8, 2.2, 1, 1, 1, 1, 2.6]
+    [1.8, 2.2, 2.2, 2.0, 3.0, 2.5, 2.7, 1.8, 2.8, 2.8, 1.7, 2.7, 2.7, 1.7, 2.6, 2.1, 2.6, 2.1, 2.0, 2.7, 2.2, 1.6, 1, 1.8, 2.0, 1.8, 3.0, 2.4, 1.8, 2.7, 2.3, 2.4, 2.7, 2.6, 1.6, 3.0, 2.1, 1.8, 2.9, 2.1, 2.8, 2.9, 2.3, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  5 ; Fitness is:  1.1621040385519112
+    Temperature and cost values:  [3642, -3.52] ;  [3601, -3.7]
+    Parents:
+    [1.8, 2.4, 2.3, 2.0, 3.0, 2.5, 2.6, 2.1, 2.8, 2.8, 1.7, 2.3, 2.7, 1.7, 2.6, 2.1, 2.6, 2.1, 2.0, 2.7, 2.2, 1.6, 1, 1.8, 1.9, 1.8, 2.9, 2.4, 1.7, 2.7, 2.9, 2.5, 2.7, 2.6, 1.6, 3.0, 2.1, 1.8, 2.9, 2.1, 2.8, 2.8, 2.1, 1, 1, 1, 1, 2.6]
+    [1.8, 2.2, 2.2, 2.0, 2.9, 2.5, 2.7, 2.2, 2.8, 2.8, 1.7, 2.7, 2.7, 1.7, 2.6, 2.1, 2.6, 2.1, 2.0, 2.7, 2.1, 1.6, 1, 1.8, 1.9, 1.9, 3.0, 2.4, 1.7, 2.7, 2.9, 2.4, 2.7, 2.6, 1.6, 3.0, 2.0, 1.8, 3.0, 2.1, 2.8, 2.8, 2.3, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  6 ; Fitness is:  0.9977267550152235
+    Temperature and cost values:  [3570, -3.42] ;  [3618, -3.5]
+    Parents:
+    [1.8, 2.3, 2.3, 2.0, 3.0, 2.5, 2.6, 2.2, 2.8, 2.8, 1.7, 2.3, 2.7, 1.8, 2.7, 2.1, 2.7, 2.0, 1.9, 2.7, 2.2, 1.6, 1, 1.8, 1.9, 1.8, 3.1, 2.4, 1.8, 2.6, 2.9, 2.4, 2.7, 2.6, 1.6, 3.0, 2.1, 1.8, 2.9, 2.1, 2.9, 2.8, 2.1, 1, 1, 1, 1, 2.6]
+    [1.8, 2.2, 2.2, 2.0, 2.9, 2.4, 2.6, 2.2, 2.7, 2.7, 1.7, 2.7, 2.7, 1.7, 2.6, 2.1, 2.6, 2.1, 2.0, 2.7, 2.1, 1.6, 1, 1.8, 1.9, 1.9, 3.0, 2.4, 1.8, 2.7, 2.9, 2.4, 2.7, 2.6, 1.6, 3.0, 2.1, 1.8, 2.9, 2.1, 2.8, 2.8, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  7 ; Fitness is:  1.012592250566674
+    Temperature and cost values:  [3533, -3.59] ;  [3590, -3.5]
+    Parents:
+    [1.9, 2.3, 2.2, 2.0, 2.9, 2.4, 2.6, 2.2, 2.8, 2.7, 1.7, 2.7, 2.7, 1.7, 2.6, 2.1, 2.7, 2.2, 1.9, 2.8, 2.3, 1.6, 1, 1.8, 1.9, 1.8, 3.1, 2.4, 1.8, 2.7, 2.8, 2.4, 2.7, 2.6, 1.6, 3.0, 2.1, 1.8, 2.9, 2.1, 2.8, 2.8, 2.2, 1, 1, 1, 1, 2.7]
+    [1.8, 2.1, 2.3, 2.1, 2.8, 2.5, 2.6, 2.1, 2.7, 2.8, 1.7, 2.7, 2.7, 1.8, 2.5, 2.0, 2.6, 2.0, 2.0, 2.7, 2.1, 1.5, 1, 1.9, 1.9, 1.8, 3.0, 2.3, 1.8, 2.6, 2.9, 2.3, 2.7, 2.6, 1.6, 3.0, 2.1, 1.9, 2.9, 2.2, 2.9, 2.8, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  8 ; Fitness is:  1.6754827518061284
+    Temperature and cost values:  [3503, -3.44] ;  [3496, -3.58]
+    Parents:
+    [1.9, 2.1, 2.2, 2.0, 2.8, 2.5, 2.6, 2.2, 2.9, 2.9, 1.7, 2.7, 2.7, 1.8, 2.5, 2.1, 2.7, 2.0, 2.0, 2.8, 2.3, 1.5, 1, 1.9, 1.9, 1.8, 3.0, 2.4, 1.7, 2.6, 2.8, 2.3, 2.7, 2.6, 1.6, 3.0, 2.1, 1.9, 2.9, 2.0, 2.8, 2.8, 2.2, 1, 1, 1, 1, 2.6]
+    [1.9, 2.1, 2.3, 2.0, 2.9, 2.5, 2.5, 2.2, 2.7, 2.6, 1.6, 2.7, 2.6, 1.7, 2.7, 2.0, 2.7, 2.0, 2.0, 2.8, 2.3, 1.5, 1, 2.0, 1.9, 1.8, 3.0, 2.4, 1.9, 2.8, 2.8, 2.4, 2.7, 2.6, 1.6, 2.9, 2.1, 1.8, 2.9, 2.2, 2.8, 2.9, 2.2, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  9 ; Fitness is:  3.866779691471596
+    Temperature and cost values:  [3429, -3.52] ;  [3507, -3.57]
+    Parents:
+    [1.9, 2.1, 2.3, 2.1, 2.8, 2.5, 2.6, 2.2, 2.9, 2.9, 1.6, 2.7, 2.7, 1.8, 2.8, 2.0, 2.7, 2.0, 2.0, 2.7, 2.3, 1.5, 1, 2.0, 1.9, 1.8, 3.0, 2.4, 1.9, 2.6, 2.8, 2.4, 2.6, 2.7, 1.6, 3.0, 2.1, 1.8, 2.9, 2.0, 2.9, 2.9, 2.2, 1, 1, 1, 1, 2.6]
+    [1.9, 2.1, 2.3, 2.0, 2.8, 2.5, 2.6, 2.2, 2.7, 2.6, 1.6, 2.7, 2.6, 1.8, 2.7, 2.1, 2.7, 2.0, 2.0, 2.8, 2.3, 1.5, 1, 2.1, 1.9, 1.8, 3.0, 2.4, 1.9, 2.8, 2.8, 2.4, 2.7, 2.6, 1.5, 2.9, 2.1, 2.0, 2.9, 2.0, 2.8, 2.9, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  10 ; Fitness is:  3.7916012610938856
+    Temperature and cost values:  [3416, -3.57] ;  [3446, -3.48]
+    Parents:
+    [2.0, 2.1, 2.3, 2.0, 2.7, 2.5, 2.7, 2.2, 2.9, 2.6, 1.6, 2.8, 2.7, 1.8, 2.7, 2.1, 2.8, 2.0, 2.0, 2.8, 2.3, 1.5, 1, 2.1, 1.9, 1.8, 3.0, 2.4, 1.9, 2.6, 2.8, 2.4, 2.7, 2.7, 1.5, 2.9, 2.0, 1.8, 2.9, 2.0, 3.0, 2.9, 2.2, 1, 1, 1, 1, 2.6]
+    [1.9, 2.1, 2.3, 2.1, 2.9, 2.5, 2.5, 2.3, 2.8, 2.6, 1.7, 2.7, 2.6, 1.8, 2.8, 2.1, 2.7, 2.0, 2.0, 2.7, 2.2, 1.5, 1, 2.0, 1.9, 1.8, 3.0, 2.5, 1.9, 2.6, 2.8, 2.4, 2.7, 2.7, 1.5, 2.9, 2.1, 1.9, 2.9, 2.0, 2.9, 3.0, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    
+
+
+![png](output_51_1.png)
+
+
+
+```python
+fitness_progress, lever_vals = iterate(iterations = 15, plot = True, population_size = 40, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  201446.83452814328
+    Temperature and cost values:  [3476, 0.66] ;  [3610, -3.58]
+    Parents:
+    [1.7, 2.7, 2.7, 2.6, 2.2, 2.9, 1.6, 2.2, 3.0, 2.6, 2.3, 1.8, 1.7, 2.0, 1.9, 2.1, 1.6, 1.6, 3.0, 2.2, 1.9, 1.4, 1, 3.0, 2.5, 1.7, 2.5, 3.0, 2.4, 3.2, 2.8, 1.9, 1.5, 3.0, 3.0, 2.9, 2.0, 2.7, 3.0, 2.8, 1.6, 3.0, 2.1, 1, 1, 1, 1, 2.2]
+    [2.0, 2.2, 2.4, 2.7, 3.0, 3.0, 3.0, 2.8, 3.1, 1.9, 1.8, 1.6, 2.2, 1.7, 1.9, 2.0, 1.9, 1.6, 2.6, 1.7, 2.7, 1.4, 1, 1.9, 3.0, 2.0, 3.0, 3.0, 2.9, 2.8, 1.6, 1.9, 2.2, 2.9, 2.8, 2.5, 2.0, 1.9, 2.4, 2.2, 2.2, 2.4, 1.9, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  2 ; Fitness is:  142460.16323586224
+    Temperature and cost values:  [3089, 0.14] ;  [3127, -3.8]
+    Parents:
+    [2.0, 2.1, 2.8, 2.6, 2.2, 3.0, 1.6, 2.2, 3.1, 2.5, 1.8, 1.8, 2.3, 1.9, 1.9, 2.1, 1.9, 1.6, 3.0, 2.2, 1.9, 1.5, 1, 3.0, 2.9, 1.7, 2.5, 3.0, 2.4, 3.2, 1.6, 1.8, 2.3, 2.9, 2.9, 2.9, 2.0, 2.7, 2.9, 2.2, 2.1, 2.4, 2.1, 1, 1, 1, 1, 2.6]
+    [2.0, 2.2, 2.4, 2.7, 3.0, 2.9, 3.0, 2.9, 3.0, 2.6, 2.2, 1.8, 1.7, 1.7, 1.9, 2.0, 1.6, 1.6, 2.5, 2.2, 1.8, 1.4, 1, 2.9, 3.0, 1.8, 2.9, 3.0, 2.4, 3.3, 1.6, 2.0, 1.6, 2.9, 2.8, 2.4, 2.0, 2.7, 3.0, 2.7, 2.3, 2.4, 1.9, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  3 ; Fitness is:  125017.67581175125
+    Temperature and cost values:  [2946, -1.46] ;  [2954, -2.79]
+    Parents:
+    [2.1, 2.1, 2.4, 2.7, 3.0, 2.9, 1.7, 2.2, 3.0, 2.5, 2.2, 1.8, 1.7, 1.7, 1.9, 2.1, 1.6, 1.6, 2.5, 2.2, 1.8, 1.5, 1, 2.9, 2.9, 1.7, 2.5, 3.0, 2.4, 3.3, 1.6, 1.8, 2.3, 2.9, 2.7, 2.9, 2.0, 2.7, 3.0, 2.7, 2.4, 2.4, 2.0, 1, 1, 1, 1, 2.6]
+    [2.0, 2.2, 2.7, 2.7, 2.2, 2.9, 3.0, 2.9, 3.0, 2.5, 2.2, 1.8, 1.7, 1.8, 1.9, 2.1, 1.9, 1.6, 2.5, 2.2, 1.8, 1.3, 1, 2.9, 3.0, 1.7, 2.5, 3.0, 2.4, 3.3, 1.6, 2.0, 1.6, 3.0, 2.9, 2.9, 2.0, 2.8, 3.0, 2.7, 2.2, 2.5, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  4 ; Fitness is:  117893.16092305505
+    Temperature and cost values:  [2736, -1.86] ;  [2742, -4.09]
+    Parents:
+    [2.1, 2.2, 2.7, 2.7, 3.0, 2.9, 1.7, 2.9, 3.0, 2.5, 2.2, 1.8, 1.7, 1.7, 1.9, 2.0, 1.7, 1.6, 2.5, 2.2, 1.7, 1.5, 1, 2.9, 2.9, 1.7, 2.5, 3.0, 2.5, 3.3, 1.6, 1.9, 2.2, 3.0, 2.8, 2.9, 2.0, 2.8, 3.0, 2.8, 2.4, 2.5, 2.2, 1, 1, 1, 1, 2.6]
+    [2.1, 2.2, 2.4, 2.7, 3.0, 2.9, 3.0, 2.9, 3.0, 2.5, 2.2, 1.9, 1.7, 1.7, 2.0, 2.1, 1.6, 1.7, 2.5, 2.2, 1.8, 1.3, 1, 2.9, 3.0, 1.7, 2.5, 3.0, 2.4, 3.3, 1.6, 1.8, 2.3, 3.0, 2.9, 3.0, 2.0, 2.7, 3.0, 2.7, 2.4, 2.4, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  5 ; Fitness is:  110735.77641886308
+    Temperature and cost values:  [2681, -4.26] ;  [2685, -4.36]
+    Parents:
+    [2.1, 2.2, 2.4, 2.7, 3.0, 2.8, 3.1, 2.9, 3.0, 2.5, 2.2, 1.9, 1.7, 1.8, 2.0, 2.0, 1.6, 1.5, 2.5, 2.2, 1.7, 1.3, 1, 2.9, 3.0, 1.7, 2.5, 3.0, 2.5, 3.2, 1.6, 1.9, 2.4, 3.0, 2.9, 3.0, 2.1, 2.7, 3.1, 2.8, 2.3, 2.4, 2.1, 1, 1, 1, 1, 2.6]
+    [2.1, 2.2, 2.8, 2.7, 3.0, 2.9, 3.0, 2.9, 3.0, 2.5, 2.2, 1.9, 1.7, 1.8, 2.0, 2.1, 1.6, 1.7, 2.4, 2.2, 1.7, 1.5, 1, 2.9, 2.9, 1.7, 2.5, 3.0, 2.4, 3.3, 1.7, 1.8, 2.2, 3.0, 2.9, 3.0, 2.0, 2.8, 3.0, 2.7, 2.4, 2.5, 2.2, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  6 ; Fitness is:  108407.71310576687
+    Temperature and cost values:  [2513, -4.44] ;  [2590, -4.38]
+    Parents:
+    [2.1, 2.2, 2.8, 2.8, 3.0, 2.8, 3.1, 2.9, 3.0, 2.5, 2.3, 1.9, 1.8, 1.9, 2.0, 2.1, 1.6, 1.5, 2.5, 2.3, 1.7, 1.5, 1, 3.0, 3.0, 1.7, 2.5, 3.0, 2.4, 3.3, 1.7, 1.9, 2.4, 3.1, 3.0, 3.0, 2.0, 2.8, 3.0, 2.7, 2.4, 2.5, 2.1, 1, 1, 1, 1, 2.6]
+    [2.1, 2.1, 2.8, 2.7, 3.0, 2.8, 3.1, 2.9, 3.0, 2.5, 2.2, 1.9, 1.7, 1.8, 2.0, 2.1, 1.7, 1.7, 2.4, 2.2, 1.7, 1.5, 1, 2.9, 3.0, 1.8, 2.5, 3.0, 2.5, 3.3, 1.6, 1.9, 2.4, 3.0, 2.9, 3.0, 2.1, 2.9, 3.1, 2.8, 2.2, 2.5, 2.1, 1, 1, 1, 1, 2.6] 
+    
+    Generation:  7 ; Fitness is:  103938.30894271393
+    Temperature and cost values:  [2431, -4.22] ;  [2473, -4.44]
+    Parents:
+    [2.1, 2.2, 2.8, 2.7, 2.9, 2.8, 3.1, 3.0, 3.0, 2.5, 2.1, 1.8, 1.8, 1.8, 2.0, 2.1, 1.7, 1.7, 2.4, 2.2, 1.7, 1.5, 1, 3.0, 3.0, 1.8, 2.5, 3.0, 2.6, 3.3, 1.7, 1.9, 2.4, 3.1, 3.0, 3.0, 2.1, 2.9, 3.1, 2.7, 2.4, 2.5, 2.1, 1, 1, 1, 1, 2.6]
+    [2.1, 2.1, 2.8, 2.8, 2.9, 2.9, 3.1, 3.0, 3.0, 2.5, 2.3, 2.0, 1.7, 1.9, 2.0, 2.1, 1.7, 1.7, 2.4, 2.2, 1.8, 1.5, 1, 2.9, 3.0, 1.8, 2.5, 3.0, 2.5, 3.3, 1.7, 1.9, 2.4, 3.1, 2.9, 3.0, 2.1, 2.8, 3.0, 2.8, 2.4, 2.5, 2.1, 1, 1, 1, 1, 2.7] 
+    
+    Generation:  8 ; Fitness is:  98976.74982158066
+    Temperature and cost values:  [2394, -4.45] ;  [2413, -4.56]
+    Parents:
+    [2.1, 2.2, 2.8, 2.7, 2.9, 2.8, 3.1, 2.9, 3.0, 2.5, 2.1, 2.1, 1.8, 1.9, 2.0, 2.2, 1.7, 1.7, 2.4, 2.2, 1.8, 1.5, 1, 2.9, 3.0, 1.8, 2.5, 3.0, 2.5, 3.3, 1.7, 1.9, 2.3, 3.1, 3.0, 3.0, 2.2, 2.8, 3.1, 2.7, 2.5, 2.5, 2.1, 1, 1, 1, 1, 2.8]
+    [2.2, 2.2, 2.8, 2.9, 2.9, 2.8, 3.1, 3.0, 3.1, 2.5, 2.1, 2.0, 1.8, 1.9, 2.0, 2.1, 1.7, 1.6, 2.4, 2.2, 1.7, 1.5, 1, 2.9, 3.0, 1.8, 2.5, 3.0, 2.6, 3.3, 1.7, 1.9, 2.4, 3.1, 3.0, 3.0, 2.1, 2.8, 3.1, 2.8, 2.4, 2.5, 2.2, 1, 1, 1, 1, 2.5] 
+    
+    Generation:  9 ; Fitness is:  97939.28928385298
+    Temperature and cost values:  [2360, -4.47] ;  [2364, -4.22]
+    Parents:
+    [2.2, 2.2, 2.8, 2.9, 2.9, 2.8, 3.0, 3.0, 3.1, 2.5, 2.1, 2.0, 1.8, 1.9, 2.0, 2.2, 1.7, 1.7, 2.4, 2.2, 1.8, 1.6, 1, 2.9, 3.0, 1.7, 2.5, 2.9, 2.6, 3.3, 1.7, 1.9, 2.3, 3.1, 3.0, 2.9, 2.1, 2.8, 3.1, 2.8, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.9]
+    [2.1, 2.2, 2.8, 2.7, 2.8, 2.8, 3.0, 2.9, 2.9, 2.5, 2.1, 2.0, 1.8, 1.9, 2.0, 2.2, 1.7, 1.6, 2.4, 2.2, 1.8, 1.5, 1, 2.9, 3.0, 1.8, 2.5, 3.0, 2.6, 3.3, 1.7, 2.0, 2.4, 3.1, 2.9, 3.0, 2.2, 2.9, 3.1, 2.8, 2.5, 2.5, 2.2, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  10 ; Fitness is:  96095.00047205764
+    Temperature and cost values:  [2208, -4.37] ;  [2309, -4.54]
+    Parents:
+    [2.2, 2.2, 2.8, 2.7, 2.9, 2.8, 3.0, 3.0, 3.0, 2.5, 2.1, 1.9, 1.8, 1.9, 1.9, 2.2, 1.7, 1.6, 2.4, 2.1, 1.8, 1.6, 1, 2.9, 3.0, 1.7, 2.5, 3.0, 2.6, 3.3, 1.7, 2.0, 2.4, 3.2, 3.1, 2.9, 2.1, 2.9, 3.1, 2.8, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.8]
+    [2.2, 2.2, 2.8, 3.0, 2.9, 2.8, 3.0, 3.0, 3.1, 2.5, 2.1, 2.0, 1.7, 1.9, 2.0, 2.2, 1.7, 1.7, 2.4, 2.2, 1.8, 1.7, 1, 2.9, 2.9, 1.7, 2.5, 2.9, 2.6, 3.3, 1.8, 1.9, 2.4, 3.1, 3.0, 2.9, 2.2, 2.9, 3.1, 2.8, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  11 ; Fitness is:  90772.58243216175
+    Temperature and cost values:  [2068, -4.48] ;  [2072, -4.73]
+    Parents:
+    [2.2, 2.1, 2.8, 2.7, 2.9, 2.8, 3.0, 2.9, 3.0, 2.5, 2.1, 1.9, 1.7, 1.9, 2.0, 2.2, 1.7, 1.7, 2.4, 2.1, 1.8, 1.7, 1, 2.9, 3.0, 1.7, 2.4, 2.9, 2.6, 3.2, 1.8, 2.0, 2.4, 3.3, 3.0, 2.9, 2.2, 3.0, 3.2, 2.8, 2.4, 2.6, 2.3, 1, 1, 1, 1, 2.9]
+    [2.2, 2.2, 2.8, 3.0, 2.9, 2.8, 3.0, 2.9, 3.0, 2.5, 2.1, 1.9, 1.8, 1.9, 1.9, 2.2, 1.7, 1.7, 2.4, 2.1, 1.8, 1.7, 1, 2.9, 2.9, 1.7, 2.5, 3.0, 2.6, 3.2, 1.9, 1.9, 2.4, 3.3, 3.1, 2.9, 2.2, 2.9, 3.1, 2.8, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  12 ; Fitness is:  83898.3893127631
+    Temperature and cost values:  [2008, -29.2] ;  [2034, -4.6]
+    Parents:
+    [2.2, 2.2, 2.8, 2.7, 2.9, 2.8, 2.9, 2.9, 3.0, 2.6, 2.1, 1.9, 1.7, 2.0, 2.1, 2.2, 1.7, 1.8, 2.5, 2.1, 1.8, 1.7, 1, 2.9, 3.1, 1.7, 2.5, 2.9, 2.6, 3.2, 1.8, 1.9, 2.5, 3.3, 3.1, 2.9, 2.2, 3.0, 3.1, 2.7, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.8]
+    [2.2, 2.1, 2.9, 2.9, 2.9, 2.8, 2.9, 2.9, 3.0, 2.6, 2.1, 1.9, 1.8, 1.9, 2.0, 2.1, 1.7, 1.8, 2.3, 2.2, 1.8, 1.7, 1, 2.8, 2.9, 1.7, 2.4, 2.8, 2.6, 3.2, 1.8, 1.9, 2.5, 3.3, 3.1, 2.9, 2.3, 3.0, 3.3, 2.7, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  13 ; Fitness is:  81941.8021488429
+    Temperature and cost values:  [1883, -4.6] ;  [1893, -4.56]
+    Parents:
+    [2.2, 2.2, 3.0, 2.7, 2.9, 2.8, 2.9, 3.0, 3.0, 2.6, 2.1, 1.9, 1.8, 2.0, 2.0, 2.2, 1.7, 1.8, 2.3, 2.2, 1.8, 1.6, 1, 2.9, 3.1, 1.7, 2.4, 2.8, 2.6, 3.2, 1.7, 1.9, 2.5, 3.4, 3.1, 2.9, 2.4, 3.0, 3.1, 2.7, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.8]
+    [2.2, 2.2, 2.9, 2.9, 2.9, 2.7, 2.9, 2.9, 2.9, 2.6, 2.1, 1.9, 1.7, 2.1, 2.0, 2.1, 1.7, 1.7, 2.3, 2.1, 1.8, 1.8, 1, 2.8, 3.1, 1.7, 2.4, 2.8, 2.6, 3.2, 1.8, 1.9, 2.6, 3.4, 3.1, 2.9, 2.2, 2.9, 3.3, 2.7, 2.4, 2.5, 2.3, 1, 1, 1, 1, 2.7] 
+    
+    Generation:  14 ; Fitness is:  76135.13519307532
+    Temperature and cost values:  [1735, -4.73] ;  [1746, -4.56]
+    Parents:
+    [2.2, 2.2, 2.9, 2.7, 2.9, 2.7, 2.9, 3.0, 2.9, 2.6, 2.0, 1.9, 1.8, 1.9, 2.0, 2.1, 1.8, 1.8, 2.2, 2.1, 1.8, 1.9, 1, 3.0, 3.1, 1.6, 2.5, 2.8, 2.7, 3.1, 1.8, 1.9, 2.6, 3.5, 3.2, 2.9, 2.3, 3.0, 3.1, 2.7, 2.4, 2.4, 2.3, 1, 1, 1, 1, 2.7]
+    [2.2, 2.2, 2.9, 2.7, 2.9, 2.7, 3.0, 3.0, 3.0, 2.6, 2.1, 1.9, 1.8, 2.0, 2.0, 2.2, 1.7, 1.8, 2.2, 2.1, 1.8, 1.6, 1, 2.9, 3.1, 1.7, 2.4, 2.8, 2.6, 3.2, 1.8, 1.8, 2.7, 3.5, 3.1, 2.9, 2.5, 2.9, 3.3, 2.7, 2.4, 2.5, 2.2, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  15 ; Fitness is:  69637.07939660233
+    Temperature and cost values:  [1593, -4.68] ;  [1612, -4.48]
+    Parents:
+    [2.2, 2.2, 3.0, 2.7, 2.9, 2.8, 2.9, 3.0, 3.0, 2.7, 2.0, 1.9, 1.8, 2.0, 2.0, 2.1, 1.9, 1.8, 2.2, 2.1, 1.8, 1.8, 1, 2.9, 3.1, 1.7, 2.4, 2.8, 2.8, 3.2, 1.8, 1.9, 2.6, 3.6, 3.1, 3.0, 2.6, 2.9, 3.3, 2.7, 2.4, 2.6, 2.3, 1, 1, 1, 1, 2.8]
+    [2.2, 2.2, 2.9, 2.7, 2.9, 2.7, 2.9, 3.0, 3.0, 2.6, 2.1, 1.9, 1.8, 2.0, 2.0, 2.1, 1.7, 1.9, 2.2, 2.2, 1.9, 1.9, 1, 3.0, 3.1, 1.7, 2.5, 2.8, 2.7, 3.1, 1.8, 1.8, 2.6, 3.6, 3.1, 3.0, 2.5, 3.0, 3.0, 2.7, 2.3, 2.4, 2.3, 1, 1, 1, 1, 2.7] 
+    
+    
+
+
+![png](output_52_1.png)
+
+
+
+```python
+fitness_progress, lever_vals = iterate(iterations = 25, plot = True, population_size = 40, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  200051.4381708145
+    Temperature and cost values:  [3370, -2.69] ;  [3414, 0.18]
+    Parents:
+    [1.9, 1.8, 2.2, 2.9, 2.6, 1.8, 2.8, 2.8, 3.0, 2.5, 2.9, 3.0, 2.5, 1.5, 1.6, 1.6, 2.9, 1.7, 1.8, 2.0, 1.5, 1.3, 1, 2.7, 2.3, 1.6, 2.9, 2.6, 2.5, 3.0, 2.0, 1.9, 3.0, 2.7, 1.9, 2.6, 2.2, 2.0, 3.0, 2.4, 2.9, 2.0, 2.5, 1, 1, 1, 1, 2.6]
+    [1.6, 2.4, 2.4, 2.3, 2.4, 2.7, 1.7, 3.0, 3.1, 2.7, 1.7, 1.8, 2.5, 1.7, 1.9, 2.9, 3.0, 1.8, 2.1, 2.9, 2.2, 1.5, 1, 2.5, 2.9, 1.5, 3.0, 1.8, 1.5, 3.2, 2.9, 2.8, 1.8, 2.8, 1.9, 2.5, 2.0, 2.6, 2.5, 2.2, 1.7, 2.8, 2.7, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  2 ; Fitness is:  137904.503796718
+    Temperature and cost values:  [3067, -1.78] ;  [3148, -2.0]
+    Parents:
+    [1.9, 2.4, 2.4, 2.9, 2.4, 2.8, 1.6, 3.0, 3.0, 2.5, 1.7, 3.0, 2.5, 1.8, 1.9, 2.9, 2.9, 1.7, 1.8, 2.9, 2.2, 1.5, 1, 2.5, 2.9, 1.6, 2.9, 2.6, 2.5, 3.2, 2.0, 1.9, 3.0, 2.6, 1.9, 2.5, 2.2, 2.6, 2.9, 2.2, 1.7, 2.1, 2.5, 1, 1, 1, 1, 2.9]
+    [1.6, 1.8, 2.2, 2.9, 2.4, 1.8, 2.8, 2.8, 3.0, 2.5, 1.7, 3.0, 2.5, 1.7, 1.5, 2.9, 3.0, 1.8, 1.8, 2.9, 1.5, 1.5, 1, 2.7, 2.9, 1.6, 2.8, 1.8, 2.5, 3.1, 2.9, 2.9, 1.8, 2.9, 1.9, 2.6, 2.1, 2.6, 2.9, 2.4, 2.9, 2.8, 2.7, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  3 ; Fitness is:  126077.59573080299
+    Temperature and cost values:  [2858, -3.68] ;  [2880, -4.79]
+    Parents:
+    [1.9, 2.4, 2.5, 2.9, 2.4, 1.8, 2.8, 3.0, 2.9, 2.5, 1.7, 3.0, 2.5, 1.8, 1.9, 2.9, 2.9, 1.7, 1.9, 2.9, 2.2, 1.5, 1, 2.5, 2.9, 1.6, 2.9, 2.6, 2.5, 3.0, 2.1, 1.8, 3.0, 2.9, 1.9, 2.5, 2.1, 2.6, 2.9, 2.2, 2.9, 2.1, 2.6, 1, 1, 1, 1, 2.8]
+    [1.9, 2.4, 2.4, 2.9, 2.4, 2.8, 2.9, 3.0, 2.9, 2.5, 1.7, 2.9, 2.5, 1.7, 1.9, 3.0, 2.9, 1.7, 1.8, 2.9, 2.2, 1.5, 1, 2.7, 2.9, 1.7, 2.9, 1.8, 2.5, 3.1, 2.1, 2.9, 1.7, 2.9, 1.9, 2.5, 2.2, 2.6, 2.9, 2.3, 2.9, 2.1, 2.7, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  4 ; Fitness is:  114660.79203031147
+    Temperature and cost values:  [2702, -4.81] ;  [2740, -5.13]
+    Parents:
+    [2.0, 2.4, 2.4, 2.9, 2.4, 2.8, 2.8, 3.0, 2.9, 2.5, 1.7, 3.0, 2.5, 1.8, 1.9, 2.9, 2.9, 1.7, 1.8, 2.9, 2.2, 1.5, 1, 2.6, 2.9, 1.6, 2.9, 1.8, 2.5, 3.1, 2.1, 2.9, 3.0, 3.0, 1.9, 2.4, 2.1, 2.6, 2.9, 2.3, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0]
+    [2.0, 2.4, 2.4, 2.9, 2.4, 2.8, 2.9, 3.0, 2.9, 2.6, 1.6, 3.0, 2.6, 1.7, 1.9, 2.9, 2.9, 1.7, 1.8, 2.9, 2.2, 1.5, 1, 2.5, 2.9, 1.6, 2.9, 1.8, 2.5, 3.1, 2.1, 1.8, 3.0, 2.9, 1.9, 2.5, 2.2, 2.6, 2.9, 2.3, 2.9, 2.2, 2.6, 1, 1, 1, 1, 2.9] 
+    
+    Generation:  5 ; Fitness is:  108933.89841944134
+    Temperature and cost values:  [2636, -5.04] ;  [2653, -4.95]
+    Parents:
+    [2.0, 2.4, 2.4, 2.9, 2.4, 2.8, 2.9, 3.0, 2.9, 2.6, 1.7, 3.0, 2.6, 1.9, 1.9, 3.0, 2.9, 1.7, 1.8, 2.9, 2.2, 1.6, 1, 2.7, 2.9, 1.5, 2.9, 1.8, 2.5, 3.1, 2.1, 2.9, 2.9, 3.0, 1.8, 2.5, 2.2, 2.6, 2.9, 2.4, 2.8, 2.2, 2.6, 1, 1, 1, 1, 3.0]
+    [2.0, 2.4, 2.3, 3.0, 2.4, 2.8, 2.8, 3.0, 2.9, 2.7, 1.8, 3.0, 2.6, 1.8, 1.9, 2.9, 3.0, 1.7, 1.8, 2.9, 2.2, 1.5, 1, 2.6, 2.8, 1.6, 2.9, 1.7, 2.5, 3.1, 2.1, 1.8, 3.0, 3.0, 1.8, 2.4, 2.2, 2.6, 2.9, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  6 ; Fitness is:  106639.97560938065
+    Temperature and cost values:  [2562, -5.14] ;  [2578, -4.99]
+    Parents:
+    [2.1, 2.4, 2.3, 2.9, 2.4, 2.8, 2.9, 3.0, 2.9, 2.7, 1.8, 2.9, 2.6, 1.8, 2.0, 2.9, 2.9, 1.7, 1.8, 2.9, 2.2, 1.6, 1, 2.7, 2.9, 1.6, 2.9, 1.8, 2.5, 3.1, 2.1, 1.8, 3.0, 3.0, 1.8, 2.4, 2.2, 2.6, 3.0, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0]
+    [2.1, 2.4, 2.3, 2.9, 2.4, 2.8, 2.8, 3.0, 2.9, 2.7, 1.8, 3.0, 2.6, 1.9, 1.8, 3.0, 2.9, 1.7, 1.8, 2.9, 2.2, 1.6, 1, 2.7, 2.8, 1.7, 2.9, 1.8, 2.5, 3.1, 2.1, 2.9, 3.0, 3.0, 1.8, 2.5, 2.2, 2.6, 2.9, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  7 ; Fitness is:  104155.10021186685
+    Temperature and cost values:  [2517, -5.3] ;  [2519, -5.43]
+    Parents:
+    [2.2, 2.4, 2.3, 2.8, 2.5, 2.8, 2.8, 2.9, 2.9, 2.7, 1.8, 2.9, 2.7, 1.8, 1.9, 2.9, 2.9, 1.7, 1.8, 2.9, 2.2, 1.5, 1, 2.8, 2.8, 1.7, 2.9, 1.8, 2.5, 3.1, 2.1, 1.7, 3.0, 3.0, 1.9, 2.5, 2.2, 2.6, 2.9, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0]
+    [2.2, 2.4, 2.4, 2.9, 2.4, 2.8, 2.8, 3.0, 2.9, 2.7, 1.8, 2.9, 2.6, 1.9, 1.8, 2.9, 2.9, 1.7, 1.8, 2.8, 2.2, 1.6, 1, 2.7, 2.9, 1.7, 2.9, 1.8, 2.5, 3.0, 2.1, 2.9, 3.0, 3.0, 1.8, 2.4, 2.2, 2.6, 2.9, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  8 ; Fitness is:  101242.78046627564
+    Temperature and cost values:  [2361, -5.28] ;  [2458, -5.58]
+    Parents:
+    [2.2, 2.4, 2.4, 2.9, 2.4, 2.8, 2.8, 3.0, 2.9, 2.7, 1.8, 2.8, 2.7, 1.9, 1.9, 2.9, 2.9, 1.7, 1.8, 2.8, 2.2, 1.6, 1, 2.7, 2.9, 1.7, 2.9, 1.7, 2.5, 3.1, 2.1, 1.7, 2.9, 3.1, 1.8, 2.5, 2.2, 2.6, 2.9, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.1]
+    [2.2, 2.4, 2.4, 2.7, 2.4, 2.8, 2.9, 3.0, 2.9, 2.7, 1.9, 2.9, 2.7, 1.9, 1.9, 3.0, 2.9, 1.7, 1.9, 2.8, 2.2, 1.6, 1, 2.8, 2.8, 1.7, 2.8, 1.8, 2.5, 3.0, 2.1, 1.7, 3.0, 3.0, 1.9, 2.5, 2.2, 2.7, 2.9, 2.5, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  9 ; Fitness is:  97079.40261140432
+    Temperature and cost values:  [2312, -29.8] ;  [2313, -5.78]
+    Parents:
+    [2.2, 2.4, 2.4, 2.9, 2.4, 2.8, 2.9, 3.0, 3.0, 2.7, 1.9, 2.9, 2.6, 2.0, 1.9, 2.8, 2.9, 1.8, 1.9, 2.8, 2.2, 1.7, 1, 2.8, 2.9, 1.7, 2.9, 1.7, 2.5, 3.0, 2.1, 1.7, 3.0, 3.1, 1.9, 2.5, 2.2, 2.7, 2.9, 2.4, 2.8, 2.1, 2.6, 1, 1, 1, 1, 3.0]
+    [2.2, 2.4, 2.4, 2.7, 2.4, 2.8, 2.9, 2.9, 2.8, 2.7, 1.8, 3.0, 2.8, 1.9, 1.9, 2.9, 3.0, 1.7, 1.9, 2.8, 2.2, 1.6, 1, 2.7, 2.9, 1.7, 2.8, 1.8, 2.5, 2.9, 2.1, 1.7, 3.0, 3.1, 1.9, 2.5, 2.2, 2.8, 2.9, 2.5, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  10 ; Fitness is:  94507.22307974774
+    Temperature and cost values:  [2270, -5.54] ;  [2272, -5.87]
+    Parents:
+    [2.2, 2.4, 2.4, 2.7, 2.4, 2.8, 2.9, 3.0, 2.9, 2.7, 1.9, 2.9, 2.5, 2.0, 2.0, 2.9, 3.0, 1.7, 1.8, 2.8, 2.2, 1.7, 1, 2.9, 2.9, 1.7, 2.8, 1.7, 2.5, 2.9, 2.1, 1.7, 3.0, 3.1, 1.9, 2.5, 2.2, 2.7, 3.0, 2.5, 2.8, 2.1, 2.6, 1, 1, 1, 1, 3.0]
+    [2.2, 2.3, 2.5, 2.9, 2.4, 2.8, 2.9, 2.9, 2.8, 2.7, 1.9, 3.0, 2.7, 2.1, 1.9, 3.0, 3.1, 1.7, 1.9, 2.8, 2.1, 1.7, 1, 2.8, 2.9, 1.8, 2.8, 1.7, 2.5, 2.9, 2.1, 1.8, 3.0, 3.1, 1.9, 2.5, 2.1, 2.7, 3.0, 2.5, 2.9, 2.2, 2.6, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  11 ; Fitness is:  92515.22250154596
+    Temperature and cost values:  [2230, -5.78] ;  [2232, -5.69]
+    Parents:
+    [2.3, 2.3, 2.4, 3.0, 2.4, 2.8, 2.9, 2.9, 2.8, 2.7, 1.9, 2.9, 2.7, 2.0, 1.9, 2.9, 3.0, 1.8, 1.9, 2.8, 2.2, 1.7, 1, 2.8, 2.9, 1.7, 2.8, 1.7, 2.5, 2.9, 2.2, 1.7, 3.0, 3.1, 1.9, 2.5, 2.2, 2.8, 3.0, 2.6, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.1]
+    [2.2, 2.4, 2.3, 2.9, 2.4, 2.9, 2.9, 2.9, 2.9, 2.7, 1.9, 3.0, 2.7, 2.1, 2.0, 3.0, 3.1, 1.7, 1.9, 2.8, 2.1, 1.8, 1, 2.9, 2.9, 1.8, 2.8, 1.7, 2.6, 2.8, 2.0, 1.8, 2.9, 3.1, 2.0, 2.5, 2.2, 2.7, 3.0, 2.6, 2.9, 2.1, 2.5, 1, 1, 1, 1, 3.0] 
+    
+    Generation:  12 ; Fitness is:  91251.46852640863
+    Temperature and cost values:  [2208, -6.48] ;  [2209, -5.94]
+    Parents:
+    [2.4, 2.3, 2.5, 2.9, 2.4, 2.9, 3.0, 2.9, 2.7, 2.7, 1.9, 2.9, 2.7, 2.2, 1.9, 2.9, 3.0, 1.8, 1.9, 2.7, 2.2, 1.7, 1, 2.8, 2.9, 1.8, 2.8, 1.7, 2.5, 2.9, 2.0, 1.8, 3.0, 3.1, 1.9, 2.5, 2.1, 2.7, 3.0, 2.5, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.0]
+    [2.3, 2.4, 2.3, 2.9, 2.5, 2.9, 2.9, 2.9, 2.9, 2.7, 1.9, 2.9, 2.7, 2.0, 1.9, 3.1, 3.1, 1.7, 1.9, 2.8, 2.2, 1.8, 1, 2.9, 2.9, 1.7, 2.8, 1.7, 2.6, 2.7, 2.0, 1.7, 2.9, 3.1, 2.0, 2.5, 2.2, 2.6, 3.0, 2.6, 2.9, 2.1, 2.7, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  13 ; Fitness is:  88989.54658365063
+    Temperature and cost values:  [1994, -6.26] ;  [2094, -6.19]
+    Parents:
+    [2.4, 2.4, 2.2, 2.9, 2.5, 2.9, 2.9, 2.9, 2.9, 2.7, 1.9, 2.9, 2.7, 2.0, 1.9, 2.9, 3.1, 1.8, 2.0, 2.7, 2.2, 1.8, 1, 2.8, 2.9, 1.7, 2.8, 1.7, 2.5, 2.7, 2.0, 1.8, 3.1, 3.2, 1.9, 2.5, 2.2, 2.7, 3.0, 2.6, 2.9, 2.1, 2.7, 1, 1, 1, 1, 3.1]
+    [2.5, 2.4, 2.3, 3.0, 2.4, 2.9, 3.0, 2.9, 3.0, 2.7, 1.9, 2.9, 2.7, 2.2, 1.8, 2.9, 3.0, 1.8, 1.9, 2.7, 2.2, 1.8, 1, 3.0, 2.9, 1.8, 2.8, 1.6, 2.6, 2.7, 2.1, 1.8, 2.9, 3.1, 2.0, 2.5, 2.2, 2.6, 3.0, 2.6, 2.8, 2.1, 2.6, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  14 ; Fitness is:  82877.54629454973
+    Temperature and cost values:  [1851, -6.23] ;  [1864, -6.16]
+    Parents:
+    [2.4, 2.4, 2.2, 3.0, 2.4, 2.9, 3.0, 3.0, 2.9, 2.6, 1.9, 2.9, 2.7, 2.0, 1.9, 2.9, 3.1, 1.8, 2.0, 2.7, 2.1, 1.8, 1, 3.0, 2.9, 1.8, 2.9, 1.6, 2.5, 2.7, 2.0, 1.7, 2.9, 3.3, 2.0, 2.5, 2.2, 2.6, 3.1, 2.5, 3.0, 2.0, 2.6, 1, 1, 1, 1, 3.1]
+    [2.5, 2.3, 2.2, 2.9, 2.4, 2.9, 3.0, 2.9, 2.9, 2.7, 1.9, 2.9, 2.6, 2.2, 1.8, 2.9, 3.0, 1.8, 1.9, 2.7, 2.2, 1.8, 1, 2.8, 2.9, 1.8, 2.8, 1.6, 2.7, 2.7, 2.0, 1.8, 2.9, 3.3, 1.9, 2.5, 2.2, 2.7, 3.0, 2.6, 2.8, 2.0, 2.6, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  15 ; Fitness is:  74224.28812744943
+    Temperature and cost values:  [1694, -6.44] ;  [1734, -6.2]
+    Parents:
+    [2.5, 2.5, 2.2, 3.0, 2.4, 2.9, 3.0, 2.9, 3.0, 2.8, 1.9, 2.9, 2.7, 2.0, 1.8, 2.9, 3.1, 1.8, 2.0, 2.7, 2.2, 1.8, 1, 3.0, 2.9, 1.9, 2.9, 1.6, 2.5, 2.7, 2.0, 1.9, 2.9, 3.4, 2.0, 2.4, 2.3, 2.7, 3.1, 2.6, 2.9, 2.0, 2.6, 1, 1, 1, 1, 3.1]
+    [2.4, 2.3, 2.3, 2.9, 2.4, 2.9, 3.0, 2.9, 2.8, 2.6, 1.9, 2.9, 2.6, 2.0, 1.9, 2.9, 3.1, 1.8, 1.9, 2.6, 2.3, 1.8, 1, 2.8, 2.9, 1.8, 2.8, 1.6, 2.5, 2.8, 1.9, 1.8, 2.9, 3.4, 2.0, 2.5, 2.2, 2.7, 3.1, 2.5, 3.0, 1.9, 2.6, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  16 ; Fitness is:  69195.4190901554
+    Temperature and cost values:  [1557, -6.06] ;  [1603, -6.54]
+    Parents:
+    [2.4, 2.3, 2.3, 3.0, 2.4, 2.9, 3.0, 2.9, 3.0, 2.9, 1.9, 2.9, 2.6, 2.1, 1.9, 2.9, 3.1, 1.8, 1.9, 2.7, 2.2, 1.8, 1, 3.0, 2.9, 1.9, 2.9, 1.5, 2.5, 2.9, 1.9, 1.8, 2.9, 3.5, 2.0, 2.5, 2.4, 2.7, 3.1, 2.4, 3.0, 2.1, 2.5, 1, 1, 1, 1, 3.1]
+    [2.5, 2.3, 2.3, 2.9, 2.4, 2.9, 3.0, 2.8, 2.7, 2.6, 1.9, 2.9, 2.8, 2.0, 1.8, 2.9, 3.1, 1.8, 1.8, 2.7, 2.2, 1.8, 1, 2.8, 2.8, 1.8, 2.8, 1.6, 2.5, 2.9, 2.0, 2.0, 2.9, 3.5, 2.0, 2.5, 2.2, 2.7, 3.1, 2.5, 3.0, 2.0, 2.5, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  17 ; Fitness is:  64223.808509062605
+    Temperature and cost values:  [1389, -6.71] ;  [1456, -6.3]
+    Parents:
+    [2.6, 2.3, 2.2, 2.9, 2.4, 2.9, 2.9, 2.9, 2.7, 2.9, 1.9, 2.8, 2.8, 2.1, 1.8, 2.9, 3.1, 1.9, 1.8, 2.7, 2.2, 1.9, 1, 2.8, 2.8, 1.8, 2.8, 1.6, 2.4, 2.9, 2.0, 2.0, 3.0, 3.6, 1.9, 2.6, 2.3, 2.7, 3.1, 2.5, 3.0, 2.1, 2.5, 1, 1, 1, 1, 3.1]
+    [2.4, 2.3, 2.3, 3.0, 2.4, 2.9, 3.0, 2.9, 2.9, 2.9, 1.8, 2.9, 2.6, 2.0, 1.9, 2.9, 3.1, 1.8, 1.8, 2.7, 2.2, 1.8, 1, 2.8, 2.9, 1.9, 2.8, 1.6, 2.4, 2.8, 2.0, 1.8, 2.9, 3.6, 2.0, 2.4, 2.4, 2.8, 3.1, 2.4, 2.9, 2.1, 2.5, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  18 ; Fitness is:  57433.9756093806
+    Temperature and cost values:  [1278, -6.32] ;  [1292, -6.68]
+    Parents:
+    [2.5, 2.2, 2.3, 2.9, 2.4, 2.9, 3.0, 2.9, 2.9, 2.9, 1.9, 2.8, 2.6, 2.1, 1.8, 2.9, 3.1, 1.7, 1.8, 2.6, 2.2, 1.8, 1, 2.8, 2.9, 1.8, 2.8, 1.5, 2.5, 2.9, 2.0, 1.9, 3.0, 3.7, 1.9, 2.6, 2.4, 2.8, 3.1, 2.4, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.1]
+    [2.6, 2.3, 2.2, 2.9, 2.4, 2.9, 2.8, 2.9, 2.7, 2.8, 1.8, 3.0, 2.8, 2.0, 1.8, 3.0, 3.0, 1.8, 1.8, 2.7, 2.2, 1.9, 1, 2.9, 2.9, 1.9, 2.8, 1.6, 2.4, 2.8, 2.0, 1.8, 3.0, 3.7, 2.0, 2.6, 2.2, 2.8, 3.1, 2.5, 2.8, 2.1, 2.5, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  19 ; Fitness is:  52554.60787304062
+    Temperature and cost values:  [1134, -6.7] ;  [1172, -6.4]
+    Parents:
+    [2.6, 2.3, 2.2, 2.9, 2.4, 2.9, 3.0, 2.9, 2.8, 2.9, 1.8, 3.0, 2.6, 2.1, 1.8, 2.9, 2.9, 1.8, 1.8, 2.6, 2.3, 1.9, 1, 2.9, 2.9, 1.8, 2.8, 1.6, 2.6, 2.9, 1.9, 2.0, 3.0, 3.8, 1.9, 2.6, 2.4, 2.7, 3.0, 2.5, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.1]
+    [2.5, 2.2, 2.3, 2.9, 2.4, 2.9, 3.0, 2.9, 2.9, 2.9, 1.9, 2.9, 2.6, 2.1, 1.8, 3.0, 3.0, 1.9, 1.8, 2.7, 2.2, 1.8, 1, 2.8, 2.8, 1.9, 2.7, 1.6, 2.4, 2.9, 2.0, 1.7, 3.0, 3.8, 2.0, 2.6, 2.4, 2.9, 3.0, 2.4, 3.0, 2.0, 2.5, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  20 ; Fitness is:  46678.11958162692
+    Temperature and cost values:  [990, -6.83] ;  [996, -6.65]
+    Parents:
+    [2.7, 2.3, 2.3, 2.9, 2.4, 2.9, 3.0, 2.9, 2.8, 2.9, 1.9, 2.9, 2.6, 2.2, 1.8, 2.9, 2.9, 1.8, 1.8, 2.8, 2.2, 1.8, 1, 2.8, 2.9, 1.8, 2.7, 1.6, 2.3, 2.9, 2.0, 1.7, 3.0, 3.9, 1.9, 2.7, 2.4, 2.7, 3.0, 2.4, 2.9, 2.0, 2.6, 1, 1, 1, 1, 3.1]
+    [2.6, 2.2, 2.2, 3.0, 2.4, 2.9, 3.0, 2.9, 2.9, 2.9, 1.9, 3.0, 2.6, 2.1, 1.8, 2.9, 3.0, 1.7, 1.8, 2.7, 2.3, 1.8, 1, 3.0, 3.0, 1.7, 2.8, 1.6, 2.4, 2.9, 2.1, 2.0, 3.0, 3.9, 2.0, 2.6, 2.5, 2.7, 3.0, 2.6, 2.9, 2.1, 2.6, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  21 ; Fitness is:  39658.29390946732
+    Temperature and cost values:  [869, -6.93] ;  [871, -6.25]
+    Parents:
+    [2.6, 2.3, 2.3, 3.0, 2.4, 2.9, 3.0, 2.9, 2.8, 3.0, 1.9, 3.0, 2.6, 2.1, 1.8, 2.9, 3.0, 1.7, 1.8, 2.7, 2.2, 1.8, 1, 3.0, 2.9, 1.7, 2.6, 1.5, 2.3, 2.9, 2.0, 2.0, 3.0, 4.0, 1.9, 2.6, 2.5, 2.7, 3.0, 2.4, 2.9, 2.0, 2.6, 1, 1, 1, 1, 3.1]
+    [2.6, 2.2, 2.2, 2.9, 2.3, 2.9, 3.0, 2.9, 2.9, 2.9, 1.9, 2.9, 2.6, 2.1, 1.8, 3.0, 3.0, 1.7, 1.8, 2.8, 2.3, 1.9, 1, 2.9, 3.0, 1.7, 2.7, 1.6, 2.4, 3.0, 2.1, 2.0, 3.0, 4.0, 1.9, 2.7, 2.5, 2.7, 3.0, 2.4, 3.0, 2.1, 2.6, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  22 ; Fitness is:  36665.11697971885
+    Temperature and cost values:  [847, -6.92] ;  [860, -6.61]
+    Parents:
+    [2.7, 2.2, 2.3, 3.0, 2.4, 2.9, 3.0, 2.9, 2.9, 2.9, 1.9, 2.9, 2.6, 2.1, 1.8, 3.0, 3.0, 1.7, 1.8, 2.6, 2.3, 1.9, 1, 2.9, 3.0, 1.6, 2.5, 1.6, 2.3, 2.9, 1.9, 2.0, 3.0, 4.0, 1.9, 2.6, 2.5, 2.7, 3.0, 2.4, 3.0, 2.1, 2.6, 1, 1, 1, 1, 3.1]
+    [2.7, 2.3, 2.3, 2.9, 2.3, 2.8, 3.0, 2.8, 2.8, 3.0, 1.9, 2.9, 2.6, 2.0, 1.7, 2.9, 3.0, 1.7, 1.8, 2.9, 2.2, 1.9, 1, 2.9, 3.0, 1.7, 2.7, 1.5, 2.3, 2.9, 2.0, 2.0, 2.9, 4.0, 1.8, 2.6, 2.6, 2.7, 3.0, 2.4, 2.9, 2.0, 2.7, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  23 ; Fitness is:  34824.320795850675
+    Temperature and cost values:  [797, -6.67] ;  [812, -6.84]
+    Parents:
+    [2.8, 2.2, 2.3, 2.9, 2.3, 2.8, 3.0, 3.0, 2.8, 3.0, 1.9, 2.8, 2.7, 2.2, 1.7, 2.9, 3.0, 1.7, 1.9, 2.9, 2.3, 1.9, 1, 2.9, 3.0, 1.6, 2.7, 1.6, 2.3, 2.9, 1.9, 2.0, 2.9, 4.0, 1.7, 2.7, 2.6, 2.7, 3.0, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 3.1]
+    [2.7, 2.3, 2.3, 2.9, 2.5, 2.7, 2.9, 2.9, 2.8, 3.1, 1.9, 2.9, 2.6, 2.1, 1.8, 2.9, 3.0, 1.8, 1.8, 2.9, 2.3, 1.9, 1, 3.0, 3.0, 1.8, 2.7, 1.6, 2.3, 2.9, 1.9, 2.0, 2.9, 4.0, 1.8, 2.6, 2.6, 2.7, 3.0, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  24 ; Fitness is:  33919.237534792584
+    Temperature and cost values:  [748, -7.38] ;  [770, -7.09]
+    Parents:
+    [2.9, 2.3, 2.3, 2.9, 2.5, 2.7, 3.0, 3.0, 2.8, 3.1, 1.9, 2.9, 2.7, 2.2, 1.8, 3.0, 3.0, 1.8, 2.0, 2.9, 2.3, 1.8, 1, 3.0, 3.0, 1.8, 2.7, 1.6, 2.3, 2.9, 1.9, 2.0, 2.9, 4.0, 1.7, 2.8, 2.6, 2.6, 3.0, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 3.1]
+    [2.8, 2.2, 2.3, 2.9, 2.6, 2.7, 2.9, 3.0, 2.8, 3.1, 1.9, 2.8, 2.6, 2.2, 1.8, 2.9, 3.0, 1.8, 1.8, 2.9, 2.3, 1.9, 1, 3.1, 3.0, 1.6, 2.8, 1.6, 2.3, 2.9, 1.9, 2.1, 2.9, 4.0, 1.8, 2.7, 2.6, 2.7, 3.0, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 3.1] 
+    
+    Generation:  25 ; Fitness is:  31629.411573532085
+    Temperature and cost values:  [724, -7.42] ;  [729, -7.52]
+    Parents:
+    [3.0, 2.3, 2.3, 2.9, 2.6, 2.6, 2.9, 3.0, 2.8, 3.1, 1.9, 2.9, 2.5, 2.2, 1.8, 2.8, 3.0, 1.7, 2.0, 3.0, 2.3, 1.9, 1, 3.0, 3.0, 1.6, 2.7, 1.6, 2.3, 2.9, 1.9, 2.1, 2.9, 4.0, 1.7, 2.8, 2.6, 2.6, 3.0, 2.4, 2.9, 2.0, 2.7, 1, 1, 1, 1, 3.1]
+    [2.9, 2.3, 2.3, 2.9, 2.7, 2.7, 2.9, 3.0, 2.8, 3.1, 2.0, 2.9, 2.7, 2.2, 1.8, 2.9, 3.0, 1.8, 1.8, 2.9, 2.3, 1.9, 1, 3.0, 3.0, 1.6, 2.7, 1.6, 2.3, 2.9, 1.9, 2.0, 3.0, 4.0, 1.8, 2.8, 2.6, 2.5, 3.0, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 3.1] 
+    
+    
+
+
+![png](output_53_1.png)
+
+
+
+```python
+fitness_progress, lever_vals = iterate(iterations = 25, plot = True, population_size = 40, constraint = True, threshold = True,  constraint_levers = constraint_lever_names, constraint_values = constraint_lever_values,  threshold_names = threshold_names, thresholds = thresholds, output_constraint_names = output_constraint_names, output_constraints = output_constraints)##, std_devs = std_devs)
+```
+
+    Generation:  1 ; Fitness is:  190716.75965101112
+    Temperature and cost values:  [3515, -0.13] ;  [3616, -0.06]
+    Parents:
+    [1.9, 1.6, 2.2, 2.9, 2.2, 2.9, 1.7, 2.2, 3.0, 3.0, 2.4, 2.7, 1.7, 2.8, 2.4, 2.7, 2.7, 1.5, 1.9, 2.8, 2.9, 1.6, 1, 2.9, 2.9, 1.8, 2.6, 3.0, 2.7, 3.2, 3.0, 2.4, 2.2, 2.7, 2.6, 2.9, 2.0, 2.7, 1.7, 1.5, 1.7, 2.2, 3.0, 1, 1, 1, 1, 2.2]
+    [2.0, 1.8, 3.0, 2.0, 2.4, 2.6, 1.7, 2.2, 3.1, 3.0, 2.3, 2.3, 1.7, 2.8, 2.2, 2.9, 1.6, 3.0, 1.6, 2.4, 3.0, 1.5, 1, 2.0, 2.6, 2.0, 2.5, 1.5, 2.1, 3.1, 2.9, 2.3, 2.8, 2.8, 2.8, 1.6, 2.0, 2.3, 2.1, 2.2, 2.4, 2.9, 1.8, 1, 1, 1, 1, 2.8] 
+    
+    Generation:  2 ; Fitness is:  146726.74375046184
+    Temperature and cost values:  [3212, 0.47] ;  [3213, 0.79]
+    Parents:
+    [1.9, 1.7, 2.2, 2.0, 2.4, 2.9, 1.7, 2.2, 3.1, 3.0, 2.4, 2.8, 1.8, 2.8, 2.2, 2.7, 1.6, 3.1, 1.5, 2.8, 2.9, 1.6, 1, 2.9, 2.8, 2.0, 2.6, 1.4, 2.7, 3.1, 2.9, 2.3, 2.7, 2.8, 2.8, 2.9, 2.0, 2.7, 1.7, 2.2, 2.5, 2.2, 3.0, 1, 1, 1, 1, 2.9]
+    [2.0, 1.6, 2.2, 2.0, 2.2, 2.6, 1.7, 2.1, 3.1, 2.9, 2.3, 2.7, 1.7, 2.8, 2.4, 2.7, 2.7, 1.5, 1.6, 2.4, 3.0, 1.6, 1, 2.9, 2.9, 1.8, 2.6, 1.5, 2.8, 3.1, 2.9, 2.4, 2.2, 2.8, 2.6, 2.9, 2.0, 2.8, 2.1, 2.2, 2.4, 2.2, 3.0, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  3 ; Fitness is:  132959.35635526094
+    Temperature and cost values:  [3044, 0.15] ;  [3062, -0.15]
+    Parents:
+    [2.0, 1.6, 2.2, 2.0, 2.2, 2.9, 1.8, 2.3, 3.1, 2.9, 2.3, 2.8, 1.7, 2.8, 2.3, 2.7, 2.8, 3.0, 1.5, 2.4, 3.0, 1.6, 1, 2.9, 2.9, 1.8, 2.6, 1.4, 2.8, 3.1, 2.9, 2.3, 2.7, 2.9, 2.6, 2.9, 2.0, 2.9, 2.1, 2.1, 2.5, 2.2, 3.0, 1, 1, 1, 1, 2.2]
+    [2.1, 1.6, 2.2, 2.0, 2.2, 2.9, 1.8, 2.2, 3.1, 3.0, 2.3, 2.8, 1.9, 2.8, 2.3, 2.7, 2.7, 3.0, 1.6, 2.4, 3.0, 1.6, 1, 2.9, 2.8, 1.8, 2.6, 1.5, 2.7, 3.1, 2.9, 2.4, 2.7, 2.9, 2.7, 3.0, 2.0, 2.8, 1.7, 2.2, 2.5, 2.2, 3.0, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  4 ; Fitness is:  124122.69084499782
+    Temperature and cost values:  [2929, -0.1] ;  [2932, -0.22]
+    Parents:
+    [2.1, 1.6, 2.2, 2.0, 2.2, 2.9, 1.8, 2.2, 3.1, 2.9, 2.3, 2.8, 1.9, 2.8, 2.3, 2.7, 2.8, 3.0, 1.6, 2.3, 2.9, 1.6, 1, 2.9, 2.8, 1.9, 2.6, 1.5, 2.8, 3.1, 2.9, 2.3, 2.8, 3.0, 2.7, 2.9, 2.0, 3.0, 2.1, 2.1, 2.6, 2.2, 3.0, 1, 1, 1, 1, 2.2]
+    [2.1, 1.6, 2.2, 2.0, 2.2, 2.9, 1.8, 2.4, 3.1, 3.0, 2.3, 2.8, 1.6, 2.7, 2.3, 2.7, 2.8, 2.9, 1.6, 2.4, 3.0, 1.6, 1, 2.9, 3.0, 1.8, 2.7, 1.5, 2.8, 3.1, 2.9, 2.4, 2.7, 2.9, 2.7, 3.0, 2.0, 2.9, 2.1, 2.2, 2.5, 2.2, 3.0, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  5 ; Fitness is:  118567.35433155463
+    Temperature and cost values:  [2855, -0.16] ;  [2861, -0.23]
+    Parents:
+    [2.1, 1.6, 2.2, 2.1, 2.2, 2.9, 1.8, 2.4, 3.1, 2.9, 2.3, 2.8, 1.6, 2.8, 2.3, 2.7, 2.8, 3.0, 1.6, 2.3, 2.9, 1.6, 1, 2.9, 2.8, 1.8, 2.7, 1.5, 2.9, 3.1, 2.9, 2.4, 2.9, 3.0, 2.8, 2.9, 2.1, 2.9, 2.1, 2.2, 2.6, 2.2, 3.0, 1, 1, 1, 1, 2.2]
+    [2.2, 1.5, 2.2, 2.0, 2.2, 2.9, 1.8, 2.4, 3.1, 2.9, 2.3, 2.8, 1.6, 2.8, 2.3, 2.7, 2.8, 2.9, 1.5, 2.4, 2.9, 1.6, 1, 2.9, 2.9, 1.8, 2.8, 1.5, 2.8, 3.1, 2.8, 2.5, 2.8, 3.0, 2.8, 3.0, 2.0, 3.0, 2.1, 2.1, 2.5, 2.2, 3.0, 1, 1, 1, 1, 2.1] 
+    
+    Generation:  6 ; Fitness is:  115251.32831247398
+    Temperature and cost values:  [2780, -0.26] ;  [2806, -0.47]
+    Parents:
+    [2.2, 1.5, 2.2, 2.0, 2.2, 2.9, 1.8, 2.4, 3.1, 3.0, 2.3, 2.8, 1.6, 2.8, 2.4, 2.6, 2.8, 2.9, 1.6, 2.4, 2.9, 1.5, 1, 2.9, 2.9, 1.8, 2.7, 1.5, 2.8, 3.1, 2.9, 2.6, 2.9, 3.0, 2.8, 3.0, 2.1, 2.9, 2.1, 2.3, 2.7, 2.1, 3.0, 1, 1, 1, 1, 2.2]
+    [2.2, 1.5, 2.2, 2.2, 2.2, 2.9, 1.8, 2.4, 3.1, 2.9, 2.3, 2.8, 1.5, 2.7, 2.3, 2.7, 2.8, 3.0, 1.7, 2.4, 2.9, 1.6, 1, 3.0, 2.8, 1.7, 2.8, 1.5, 2.9, 3.1, 2.8, 2.5, 2.9, 3.0, 2.8, 3.0, 2.0, 3.0, 2.1, 2.2, 2.5, 2.1, 3.0, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  7 ; Fitness is:  113513.01434890067
+    Temperature and cost values:  [2760, -0.36] ;  [2768, -0.43]
+    Parents:
+    [2.2, 1.5, 2.2, 2.2, 2.2, 2.9, 1.7, 2.4, 3.1, 2.9, 2.3, 2.8, 1.6, 2.7, 2.3, 2.7, 2.8, 2.9, 1.6, 2.4, 2.9, 1.6, 1, 3.0, 2.9, 1.7, 2.7, 1.5, 2.9, 3.1, 2.9, 2.5, 2.8, 3.0, 2.8, 3.0, 2.2, 2.9, 2.1, 2.3, 2.5, 2.1, 3.0, 1, 1, 1, 1, 2.2]
+    [2.2, 1.5, 2.2, 2.2, 2.2, 2.9, 1.8, 2.4, 3.1, 2.9, 2.4, 2.9, 1.6, 2.8, 2.3, 2.6, 2.9, 2.9, 1.7, 2.5, 2.8, 1.6, 1, 2.9, 2.8, 1.7, 2.8, 1.5, 3.0, 3.1, 2.9, 2.6, 2.9, 3.0, 2.8, 3.0, 2.1, 3.0, 2.1, 2.2, 2.7, 2.1, 3.0, 1, 1, 1, 1, 2.1] 
+    
+    Generation:  8 ; Fitness is:  111836.12305083766
+    Temperature and cost values:  [2672, -0.39] ;  [2728, -0.24]
+    Parents:
+    [2.3, 1.5, 2.2, 2.2, 2.2, 2.9, 1.7, 2.4, 3.1, 2.9, 2.4, 2.9, 1.6, 2.7, 2.3, 2.7, 2.8, 3.0, 1.6, 2.5, 2.8, 1.6, 1, 3.0, 3.0, 1.6, 2.8, 1.4, 2.9, 3.1, 2.8, 2.6, 2.8, 3.0, 2.9, 3.0, 2.2, 3.1, 2.1, 2.2, 2.7, 2.1, 3.0, 1, 1, 1, 1, 2.2]
+    [2.3, 1.5, 2.2, 2.2, 2.2, 2.8, 1.7, 2.5, 3.1, 2.9, 2.3, 2.9, 1.7, 2.7, 2.3, 2.6, 2.8, 2.8, 1.6, 2.5, 2.9, 1.6, 1, 3.0, 2.8, 1.7, 2.7, 1.5, 2.9, 3.1, 2.9, 2.6, 2.9, 3.0, 2.8, 3.0, 2.1, 3.0, 2.2, 2.3, 2.7, 2.0, 3.0, 1, 1, 1, 1, 2.1] 
+    
+    Generation:  9 ; Fitness is:  109055.01695080877
+    Temperature and cost values:  [2566, -0.92] ;  [2643, -0.16]
+    Parents:
+    [2.4, 1.5, 2.2, 2.2, 2.2, 2.9, 1.7, 2.4, 3.1, 2.9, 2.4, 2.9, 1.7, 2.6, 2.3, 2.6, 2.8, 2.9, 1.6, 2.5, 2.9, 1.6, 1, 3.0, 2.9, 1.6, 2.8, 1.5, 3.0, 3.1, 2.8, 2.6, 2.9, 3.0, 2.9, 2.9, 2.2, 3.1, 2.2, 2.2, 2.8, 2.0, 3.0, 1, 1, 1, 1, 2.1]
+    [2.3, 1.5, 2.2, 2.2, 2.2, 2.9, 1.6, 2.4, 3.1, 2.9, 2.4, 2.8, 1.7, 2.7, 2.3, 2.6, 2.8, 3.0, 1.6, 2.5, 2.8, 1.6, 1, 3.0, 3.0, 1.6, 2.8, 1.4, 2.9, 3.1, 2.8, 2.6, 2.9, 3.0, 2.8, 3.0, 2.2, 3.0, 2.2, 2.4, 2.7, 2.0, 3.0, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  10 ; Fitness is:  105161.89466112967
+    Temperature and cost values:  [2536, -0.97] ;  [2545, -1.07]
+    Parents:
+    [2.4, 1.5, 2.2, 2.2, 2.2, 2.9, 1.7, 2.4, 3.1, 2.9, 2.4, 2.9, 1.6, 2.7, 2.3, 2.6, 2.8, 2.8, 1.6, 2.5, 3.0, 1.6, 1, 3.0, 3.0, 1.6, 2.9, 1.4, 2.9, 3.0, 2.8, 2.6, 2.9, 3.0, 2.8, 2.9, 2.2, 3.1, 2.2, 2.2, 2.9, 2.0, 3.0, 1, 1, 1, 1, 2.2]
+    [2.5, 1.5, 2.2, 2.2, 2.1, 2.9, 1.7, 2.4, 3.0, 2.9, 2.4, 2.9, 1.7, 2.7, 2.3, 2.6, 2.8, 3.0, 1.7, 2.5, 2.8, 1.6, 1, 3.0, 3.0, 1.6, 2.7, 1.4, 3.0, 3.1, 2.8, 2.5, 2.9, 3.0, 2.8, 3.0, 2.2, 3.0, 2.2, 2.2, 2.8, 2.0, 3.0, 1, 1, 1, 1, 2.1] 
+    
+    Generation:  11 ; Fitness is:  102800.54340354077
+    Temperature and cost values:  [2371, -1.49] ;  [2414, -0.73]
+    Parents:
+    [2.5, 1.6, 2.2, 2.2, 2.2, 2.9, 1.7, 2.4, 3.0, 2.9, 2.4, 2.9, 1.7, 2.7, 2.3, 2.6, 2.8, 2.8, 1.6, 2.5, 2.9, 1.6, 1, 3.0, 2.9, 1.7, 2.9, 1.4, 3.0, 3.0, 2.8, 2.5, 2.9, 3.1, 2.8, 3.0, 2.3, 3.0, 2.2, 2.2, 2.9, 2.0, 2.9, 1, 1, 1, 1, 2.2]
+    [2.4, 1.5, 2.2, 2.2, 2.1, 2.9, 1.6, 2.4, 3.0, 2.8, 2.4, 2.9, 1.6, 2.7, 2.2, 2.6, 2.8, 2.8, 1.5, 2.5, 3.0, 1.6, 1, 3.1, 3.0, 1.7, 2.9, 1.4, 2.9, 3.0, 2.8, 2.6, 2.8, 3.1, 2.8, 3.0, 2.2, 3.1, 2.3, 2.2, 3.0, 1.9, 2.9, 1, 1, 1, 1, 2.1] 
+    
+    Generation:  12 ; Fitness is:  97116.59457439941
+    Temperature and cost values:  [2303, -1.44] ;  [2343, -0.88]
+    Parents:
+    [2.5, 1.5, 2.2, 2.2, 2.2, 2.9, 1.6, 2.4, 3.0, 3.0, 2.4, 2.9, 1.6, 2.7, 2.2, 2.7, 2.8, 2.8, 1.5, 2.5, 3.0, 1.6, 1, 3.1, 2.9, 1.7, 2.9, 1.4, 3.0, 2.9, 2.9, 2.5, 2.8, 3.1, 2.8, 3.0, 2.4, 3.1, 2.2, 2.1, 2.9, 2.0, 2.9, 1, 1, 1, 1, 2.2]
+    [2.5, 1.4, 2.2, 2.2, 2.1, 2.9, 1.7, 2.4, 3.0, 2.8, 2.4, 2.9, 1.7, 2.7, 2.2, 2.5, 2.8, 2.8, 1.5, 2.5, 3.0, 1.6, 1, 3.1, 3.0, 1.7, 3.0, 1.4, 2.9, 3.0, 2.8, 2.5, 2.9, 3.1, 2.9, 3.0, 2.3, 3.1, 2.2, 2.2, 3.0, 2.0, 2.9, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  13 ; Fitness is:  94101.17537809991
+    Temperature and cost values:  [2236, -1.15] ;  [2239, -1.42]
+    Parents:
+    [2.5, 1.6, 2.2, 2.2, 2.1, 2.9, 1.6, 2.5, 3.0, 3.0, 2.4, 2.8, 1.6, 2.7, 2.2, 2.5, 2.9, 2.8, 1.5, 2.4, 3.0, 1.6, 1, 3.1, 3.0, 1.6, 2.9, 1.4, 2.9, 2.9, 2.9, 2.6, 3.0, 3.1, 3.0, 2.9, 2.4, 3.1, 2.2, 2.2, 2.9, 2.0, 2.9, 1, 1, 1, 1, 2.2]
+    [2.5, 1.5, 2.3, 2.3, 2.2, 2.9, 1.6, 2.3, 3.0, 3.0, 2.4, 2.9, 1.6, 2.7, 2.2, 2.7, 2.9, 2.8, 1.5, 2.5, 2.9, 1.6, 1, 3.1, 3.1, 1.6, 3.0, 1.4, 2.9, 2.9, 2.8, 2.5, 2.8, 3.1, 2.9, 3.0, 2.4, 3.1, 2.2, 2.2, 3.0, 2.0, 2.9, 1, 1, 1, 1, 2.3] 
+    
+    Generation:  14 ; Fitness is:  90968.1369276807
+    Temperature and cost values:  [2149, -1.71] ;  [2181, -1.38]
+    Parents:
+    [2.6, 1.6, 2.3, 2.2, 2.1, 2.9, 1.6, 2.5, 2.9, 3.0, 2.4, 2.9, 1.6, 2.7, 2.2, 2.6, 2.9, 2.8, 1.6, 2.5, 2.9, 1.6, 1, 3.2, 3.1, 1.6, 3.0, 1.4, 2.9, 2.9, 2.8, 2.6, 3.0, 3.1, 3.0, 3.0, 2.4, 3.1, 2.3, 2.2, 2.9, 2.0, 2.9, 1, 1, 1, 1, 2.3]
+    [2.5, 1.5, 2.2, 2.3, 2.3, 2.9, 1.6, 2.5, 3.0, 3.0, 2.5, 3.0, 1.6, 2.7, 2.3, 2.5, 2.9, 2.8, 1.5, 2.5, 2.9, 1.7, 1, 3.1, 3.1, 1.6, 3.0, 1.4, 2.9, 2.9, 2.9, 2.6, 3.0, 3.1, 3.0, 3.0, 2.4, 3.1, 2.2, 2.1, 3.0, 2.0, 2.9, 1, 1, 1, 1, 2.2] 
+    
+    Generation:  15 ; Fitness is:  88414.71108206056
+    Temperature and cost values:  [2086, -1.65] ;  [2111, -2.15]
+    Parents:
+    [2.6, 1.6, 2.3, 2.3, 2.3, 2.9, 1.6, 2.6, 3.0, 3.0, 2.4, 2.9, 1.6, 2.7, 2.2, 2.5, 2.9, 2.7, 1.6, 2.5, 2.8, 1.7, 1, 3.1, 3.1, 1.6, 3.0, 1.4, 2.9, 2.9, 2.9, 2.6, 3.0, 3.1, 3.0, 3.0, 2.5, 3.1, 2.3, 2.2, 2.9, 2.0, 2.9, 1, 1, 1, 1, 2.2]
+    [2.7, 1.5, 2.2, 2.4, 2.1, 3.0, 1.5, 2.5, 2.9, 3.0, 2.4, 2.9, 1.6, 2.6, 2.3, 2.6, 2.9, 2.8, 1.6, 2.5, 2.9, 1.7, 1, 3.1, 3.1, 1.6, 3.0, 1.4, 2.9, 2.9, 2.9, 2.5, 2.9, 3.1, 3.0, 3.0, 2.4, 3.1, 2.2, 2.1, 3.0, 1.9, 2.8, 1, 1, 1, 1, 2.3] 
+    
+    Generation:  16 ; Fitness is:  86344.67002973333
+    Temperature and cost values:  [2015, -2.63] ;  [2017, -1.76]
+    Parents:
+    [2.8, 1.6, 2.2, 2.5, 2.4, 2.8, 1.5, 2.5, 3.0, 2.9, 2.4, 2.9, 1.6, 2.7, 2.2, 2.7, 2.9, 2.9, 1.5, 2.5, 2.8, 1.7, 1, 3.0, 3.1, 1.6, 3.0, 1.4, 2.9, 2.9, 2.9, 2.6, 3.0, 3.1, 2.9, 3.0, 2.4, 3.1, 2.3, 2.2, 2.9, 2.0, 3.0, 1, 1, 1, 1, 2.3]
+    [2.8, 1.5, 2.3, 2.3, 2.1, 2.8, 1.6, 2.5, 3.0, 3.0, 2.5, 2.9, 1.6, 2.7, 2.2, 2.5, 3.0, 2.7, 1.6, 2.5, 2.7, 1.7, 1, 3.1, 3.2, 1.6, 3.0, 1.4, 2.9, 2.9, 2.9, 2.6, 2.9, 3.1, 2.9, 3.0, 2.5, 3.2, 2.1, 2.2, 2.9, 1.9, 2.9, 1, 1, 1, 1, 2.3] 
+    
+    Generation:  17 ; Fitness is:  82168.89870854217
+    Temperature and cost values:  [1932, -2.54] ;  [1970, -2.27]
+    Parents:
+    [2.8, 1.5, 2.2, 2.3, 2.4, 2.8, 1.6, 2.6, 3.0, 3.0, 2.5, 2.9, 1.6, 2.7, 2.2, 2.7, 3.0, 2.7, 1.5, 2.5, 2.9, 1.7, 1, 3.1, 3.2, 1.6, 3.0, 1.4, 2.9, 2.9, 2.9, 2.6, 3.0, 3.1, 2.9, 3.0, 2.5, 3.1, 2.3, 2.2, 3.0, 1.9, 3.0, 1, 1, 1, 1, 2.3]
+    [2.8, 1.6, 2.2, 2.5, 2.1, 2.8, 1.6, 2.5, 2.9, 2.9, 2.4, 2.9, 1.7, 2.7, 2.2, 2.6, 3.0, 2.9, 1.6, 2.5, 2.6, 1.7, 1, 3.1, 3.3, 1.6, 2.9, 1.4, 2.9, 2.9, 3.0, 2.6, 3.0, 3.1, 2.9, 3.0, 2.5, 3.2, 2.1, 2.2, 2.9, 1.9, 2.9, 1, 1, 1, 1, 2.3] 
+    
+    Generation:  18 ; Fitness is:  78909.85736711406
+    Temperature and cost values:  [1834, -2.99] ;  [1852, -2.39]
+    Parents:
+    [2.9, 1.6, 2.2, 2.3, 2.4, 2.8, 1.6, 2.6, 2.9, 2.9, 2.4, 2.9, 1.7, 2.7, 2.2, 2.7, 3.0, 2.7, 1.7, 2.5, 2.9, 1.7, 1, 3.1, 3.3, 1.6, 2.9, 1.3, 2.9, 2.9, 3.0, 2.6, 3.0, 3.1, 3.0, 3.1, 2.5, 3.2, 2.3, 2.2, 2.8, 2.0, 3.0, 1, 1, 1, 1, 2.3]
+    [2.8, 1.6, 2.2, 2.5, 2.1, 2.8, 1.6, 2.7, 2.9, 3.0, 2.5, 2.9, 1.7, 2.7, 2.3, 2.6, 3.0, 2.8, 1.6, 2.4, 2.5, 1.7, 1, 3.1, 3.2, 1.6, 2.9, 1.4, 2.9, 2.9, 3.0, 2.6, 3.0, 3.2, 2.9, 3.0, 2.5, 3.1, 2.3, 2.1, 3.0, 1.9, 2.9, 1, 1, 1, 1, 2.3] 
+    
+    Generation:  19 ; Fitness is:  73670.52345557892
+    Temperature and cost values:  [1683, -3.23] ;  [1692, -3.29]
+    Parents:
+    [2.9, 1.6, 2.2, 2.4, 2.4, 2.8, 1.6, 2.7, 2.9, 3.0, 2.5, 2.9, 1.7, 2.7, 2.3, 2.7, 3.0, 2.8, 1.7, 2.3, 2.9, 1.7, 1, 3.1, 3.3, 1.6, 2.9, 1.3, 2.9, 2.9, 3.0, 2.6, 2.9, 3.2, 3.0, 3.1, 2.4, 3.3, 2.3, 2.2, 2.9, 1.9, 2.8, 1, 1, 1, 1, 2.4]
+    [3.0, 1.6, 2.2, 2.3, 2.4, 2.8, 1.6, 2.7, 2.9, 3.0, 2.5, 2.9, 1.8, 2.7, 2.2, 2.6, 3.0, 2.7, 1.7, 2.5, 2.4, 1.7, 1, 3.1, 3.3, 1.6, 2.8, 1.3, 2.9, 2.9, 3.0, 2.6, 3.0, 3.2, 2.9, 3.0, 2.5, 3.3, 2.3, 2.0, 3.0, 2.0, 2.9, 1, 1, 1, 1, 2.3] 
+    
+    Generation:  20 ; Fitness is:  67737.19272415365
+    Temperature and cost values:  [1519, -2.82] ;  [1583, -3.18]
+    Parents:
+    [2.9, 1.6, 2.2, 2.3, 2.4, 2.7, 1.6, 2.7, 2.9, 3.0, 2.5, 2.8, 1.8, 2.7, 2.2, 2.6, 3.0, 2.7, 1.6, 2.5, 2.9, 1.7, 1, 3.1, 3.4, 1.6, 2.8, 1.2, 2.9, 3.0, 2.9, 2.6, 2.9, 3.3, 3.0, 3.1, 2.4, 3.4, 2.3, 2.3, 3.0, 1.9, 2.8, 1, 1, 1, 1, 2.4]
+    [2.9, 1.6, 2.2, 2.3, 2.4, 2.8, 1.6, 2.8, 2.9, 3.0, 2.5, 3.0, 1.7, 2.7, 2.4, 2.7, 3.0, 2.8, 1.6, 2.5, 2.4, 1.7, 1, 3.1, 3.2, 1.5, 2.8, 1.3, 2.8, 2.9, 2.9, 2.6, 2.9, 3.3, 2.9, 3.0, 2.5, 3.4, 2.3, 2.2, 2.9, 2.0, 2.8, 1, 1, 1, 1, 2.4] 
+    
+    Generation:  21 ; Fitness is:  62201.42140296255
+    Temperature and cost values:  [1365, -2.65] ;  [1371, -2.92]
+    Parents:
+    [2.9, 1.7, 2.2, 2.3, 2.4, 2.8, 1.5, 2.7, 3.0, 3.0, 2.5, 2.8, 1.8, 2.7, 2.1, 2.5, 3.0, 2.7, 1.6, 2.5, 2.4, 1.7, 1, 3.1, 3.4, 1.6, 2.8, 1.2, 2.9, 2.9, 2.9, 2.6, 2.9, 3.4, 2.8, 3.1, 2.5, 3.4, 2.4, 2.3, 3.0, 1.9, 2.8, 1, 1, 1, 1, 2.4]
+    [2.9, 1.6, 2.2, 2.3, 2.4, 2.8, 1.6, 2.7, 3.0, 3.0, 2.5, 3.0, 1.8, 2.7, 2.4, 2.7, 3.0, 2.7, 1.5, 2.5, 2.9, 1.7, 1, 3.1, 3.4, 1.5, 2.8, 1.2, 2.9, 2.9, 2.9, 2.6, 2.9, 3.4, 2.9, 3.1, 2.5, 3.4, 2.3, 2.3, 3.0, 2.0, 2.8, 1, 1, 1, 1, 2.4] 
+    
+    Generation:  22 ; Fitness is:  55432.40376780788
+    Temperature and cost values:  [1231, -2.76] ;  [1241, -2.77]
+    Parents:
+    [2.9, 1.6, 2.2, 2.3, 2.4, 2.8, 1.6, 2.7, 3.0, 2.9, 2.6, 2.9, 1.8, 2.7, 2.1, 2.7, 3.0, 2.7, 1.6, 2.5, 2.5, 1.8, 1, 3.1, 3.4, 1.5, 2.9, 1.2, 2.8, 3.0, 2.9, 2.6, 2.9, 3.5, 2.9, 3.1, 2.6, 3.5, 2.3, 2.3, 3.0, 1.9, 2.8, 1, 1, 1, 1, 2.4]
+    [2.9, 1.7, 2.2, 2.2, 2.4, 2.9, 1.5, 2.8, 3.0, 3.0, 2.5, 2.8, 1.7, 2.7, 2.4, 2.5, 3.0, 2.7, 1.6, 2.6, 2.9, 1.7, 1, 3.1, 3.4, 1.7, 2.8, 1.2, 2.9, 2.9, 2.9, 2.6, 2.9, 3.5, 2.9, 3.1, 2.5, 3.4, 2.3, 2.4, 3.0, 2.0, 2.8, 1, 1, 1, 1, 2.5] 
+    
+    Generation:  23 ; Fitness is:  49753.7165749776
+    Temperature and cost values:  [1125, -3.01] ;  [1130, -2.59]
+    Parents:
+    [2.9, 1.7, 2.2, 2.3, 2.5, 2.9, 1.6, 2.8, 3.0, 2.9, 2.5, 2.8, 1.7, 2.7, 2.1, 2.5, 3.0, 2.7, 1.6, 2.6, 2.5, 1.8, 1, 3.1, 3.4, 1.5, 2.8, 1.3, 2.8, 2.9, 3.0, 2.5, 2.9, 3.6, 2.8, 3.1, 2.6, 3.4, 2.3, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 2.5]
+    [2.9, 1.7, 2.3, 2.2, 2.4, 2.7, 1.5, 2.8, 3.0, 3.0, 2.5, 2.9, 1.7, 2.7, 2.4, 2.6, 3.0, 2.7, 1.6, 2.5, 2.9, 1.7, 1, 3.1, 3.5, 1.5, 2.9, 1.2, 2.9, 3.0, 3.0, 2.6, 2.9, 3.6, 2.9, 3.1, 2.5, 3.4, 2.3, 2.3, 3.0, 2.0, 2.8, 1, 1, 1, 1, 2.4] 
+    
+    Generation:  24 ; Fitness is:  44461.33264898742
+    Temperature and cost values:  [972, -2.9] ;  [991, -3.34]
+    Parents:
+    [2.9, 1.7, 2.3, 2.3, 2.5, 2.8, 1.5, 2.8, 3.0, 2.9, 2.5, 2.9, 1.7, 2.7, 2.4, 2.6, 3.0, 2.7, 1.6, 2.6, 2.5, 1.8, 1, 3.1, 3.5, 1.5, 2.8, 1.2, 2.8, 2.9, 3.0, 2.5, 2.9, 3.7, 2.9, 3.1, 2.6, 3.4, 2.3, 2.3, 3.0, 2.0, 2.8, 1, 1, 1, 1, 2.5]
+    [3.0, 1.8, 2.3, 2.2, 2.5, 2.9, 1.5, 2.8, 3.0, 3.0, 2.4, 2.8, 1.7, 2.7, 2.4, 2.6, 3.0, 2.7, 1.6, 2.6, 2.6, 1.7, 1, 3.0, 3.4, 1.5, 2.9, 1.3, 2.9, 2.8, 3.0, 2.6, 2.9, 3.7, 2.9, 3.1, 2.6, 3.4, 2.3, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 2.5] 
+    
+    Generation:  25 ; Fitness is:  40181.75097798426
+    Temperature and cost values:  [888, -3.19] ;  [889, -3.46]
+    Parents:
+    [3.0, 1.8, 2.3, 2.2, 2.5, 2.7, 1.5, 2.8, 3.0, 3.0, 2.4, 2.9, 1.7, 2.6, 2.4, 2.6, 3.0, 2.7, 1.6, 2.6, 2.6, 1.7, 1, 3.0, 3.5, 1.5, 2.9, 1.2, 2.9, 2.9, 3.0, 2.5, 2.9, 3.8, 2.9, 3.0, 2.5, 3.4, 2.4, 2.4, 3.0, 2.0, 2.7, 1, 1, 1, 1, 2.5]
+    [2.9, 1.7, 2.3, 2.3, 2.6, 2.9, 1.5, 2.7, 2.9, 3.0, 2.5, 2.9, 1.7, 2.7, 2.4, 2.6, 2.9, 2.6, 1.6, 2.6, 2.6, 1.7, 1, 3.1, 3.5, 1.5, 2.8, 1.2, 2.8, 2.8, 3.0, 2.5, 2.8, 3.8, 2.9, 3.1, 2.6, 3.4, 2.3, 2.3, 3.0, 2.0, 2.8, 1, 1, 1, 1, 2.5] 
+    
+    
+
+
+![png](output_54_1.png)
+
+
+
+```python
+move_lever(lever_names,[2.2, 2.2, 2.9, 2.7, 2.9, 2.7, 2.9, 3.0, 3.0, 2.6, 2.1, 1.9, 1.8, 2.0, 2.0, 2.1, 1.7, 1.9, 2.2, 2.2, 1.9, 1.9, 1, 3.0, 3.1, 1.7, 2.5, 2.8, 2.7, 3.1, 1.8, 1.8, 2.6, 3.6, 3.1, 3.0, 2.5, 3.0, 3.0, 2.7, 2.3, 2.4, 2.3, 1, 1, 1, 1, 2.7] 
+)
+```
+
+
+
+
+    1612
+
+
+
+## Fitness as a function of generations
+
+
+```python
+# Plot evolution of fitness as a function of generations
+plt.figure(figsize = (11, 7))
+#plt.plot(moving_average(fitness_progress[:-1], n=2), '-o')
+plt.plot(fitness_progress, '-o')
+
+plt.legend(['GA'], prop={'size': 16})
+plt.title("Fitness (cost) as a function of generations (iterations)", fontsize = 16)
+plt.ylabel("Cost", fontsize = 16)
+plt.xlabel("Generation", fontsize = 16)
+```
+
+
+
+
+    Text(0.5, 0, 'Generation')
+
+
+
+
+![png](output_57_1.png)
+
+
+
+```python
+# Plot evolution of fitness as a function of generations
+plt.figure(figsize = (11, 7))
+#plt.plot(moving_average(fitness_progress[:-1], n=2), '-o')
+plt.plot(fitness_progress, '-o')
+plt.plot([-0.8468611712847574,
+  -1.4795059385315001,
+  -0.5304027195317185,
+  -0.9699041356506845,
+  -0.1592101622377461,
+  -0.15642432995889177,
+  -0.22729112580939115], 'o-')
+plt.legend(['GA', 'CMA-ES'], prop={'size': 16})
+plt.title("Fitness (cost) as a function of generations (iterations)", fontsize = 16)
+plt.ylabel("Cost", fontsize = 16)
+plt.xlabel("Generation", fontsize = 16)
+```
+
+
+
+
+    Text(0.5, 0, 'Generation')
+
+
+
+
+![png](output_58_1.png)
+
+
+
+```python
+# Run GA optimiser
+fitness_progress, lever_vals = iterate(iterations = 30, population_size = 30)
+```
+
+
+    ---------------------------------------------------------------------------
+
+    ValueError                                Traceback (most recent call last)
+
+    <ipython-input-327-6224d202c0ad> in move_lever(lever, value, costs, constraint, address, constraint_levers, constraint_values)
+         34     try:
+    ---> 35         output = int(read_CO2()[:4]) # Read output CO2
+         36     except: # Problem reading output CO2? The code below sorts it
+    
+
+    ValueError: invalid literal for int() with base 10: 'Keep'
+
+    
+    During handling of the above exception, another exception occurred:
+    
+
+    ValueError                                Traceback (most recent call last)
+
+    <ipython-input-369-069344c68bf4> in <module>
+          1 # Run GA optimiser
+    ----> 2 fitness_progress, lever_vals = iterate(iterations = 30, population_size = 30)
+    
+
+    <ipython-input-358-dbdf8193703a> in iterate(iterations, population_size, constraint, constraint_levers, constraint_values, output_constraint, output_constraint_names, output_constraints, threshold, threshold_names, thresholds, std_devs)
+         29 
+         30         # Generate chromosome and read associated temperature, cost and other output values
+    ---> 31         lever_values_temp, temperature_cost_temp = generate_chromosome(constraint = constraint, constraint_levers = constraint_levers, constraint_values = constraint_values, threshold = threshold, threshold_names  = threshold_names, thresholds = thresholds)  # Generate chromosome
+         32         lever_values.append(lever_values_temp)
+         33         results.append(temperature_cost_temp) # Calculate temperature and cost values associated to chromosome
+    
+
+    <ipython-input-129-b4c49329ad58> in generate_chromosome(constraint, constraint_levers, constraint_values, threshold, threshold_names, thresholds)
+          4     if constraint == True:
+          5         lever_names, random_lever_values = overwrite_lever_values(lever_names, random_lever_values, constraint_levers,  constraint_values)
+    ----> 6     result = move_lever(lever_names, random_lever_values, costs = True, constraint = constraint, constraint_levers = constraint_levers, constraint_values = constraint_values) # Move lever accordingly and read temperature and cost valuesw
+          7     return random_lever_values, result
+    
+
+    <ipython-input-327-6224d202c0ad> in move_lever(lever, value, costs, constraint, address, constraint_levers, constraint_values)
+         42         id_box = driver.find_element_by_id('lets-start') # Bypass "Start" screen
+         43         id_box.click()
+    ---> 44         output = int(read_CO2()[:4]) # Read output CO2
+         45 
+         46     # Read cost values
+    
+
+    ValueError: invalid literal for int() with base 10: 'Keep'
+
+
+
+```python
+fitness_progress_temp = fitness_progress.copy()
+```
+
+
+```python
+# Plot evolution of fitness as a function of generations
+plt.figure(figsize = (9, 8))
+plt.plot(fitness_progress, 'o-')
+plt.title("Fitness (cost) as a function of generations (iterations)")
+plt.ylabel("Cost")
+plt.xlabel("Generation")
+
+plt.plot([-0.8468611712847574,
+  -1.4795059385315001,
+  -0.5304027195317185,
+  -0.9699041356506845,
+  -0.1592101622377461,
+  -0.15642432995889177,
+  -0.22729112580939115,
+  0.02672299875118224,
+  0.4040100081492714,
+  -0.10720557637949052], 'o-')
+plt.legend(['GA', 'CMA-ES'])
+```
+
+
+
+
+    <matplotlib.legend.Legend at 0x22829322d08>
+
+
+
+
+![png](output_61_1.png)
+
+
+
+```python
+plt.figure(figsize = (8, 5))
+plt.title("Fitness (cost) as a function of generations (iterations) for CMA-ES")
+plt.ylabel("Cost")
+plt.xlabel("Generation")
+
+plt.plot([-0.8468611712847574,
+  -1.4795059385315001,
+  -0.5304027195317185,
+  -0.9699041356506845,
+  -0.1592101622377461,
+  -0.15642432995889177,
+  -0.22729112580939115,
+  0.02672299875118224,
+  0.4040100081492714,
+  -0.10720557637949052], 'o-')
+```
+
+
+
+
+    [<matplotlib.lines.Line2D at 0x2282d205fc8>]
+
+
+
+
+![png](output_62_1.png)
+
+
+
+```python
+
+```
