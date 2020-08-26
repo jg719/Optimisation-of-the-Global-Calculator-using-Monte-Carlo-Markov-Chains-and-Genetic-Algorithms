@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Optimisation of the Global Calculator using Monte Carlo Markov Chain and Genetic Algorithms &#8212; Optimisation of the Global Calculator 25/07/2020 documentation</title>
+    <link rel="stylesheet" href="_static/bootstrap-sphinx.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Defining the optimisation constraints" href="optimisation_constraints/constraints.html" />
+<meta charset='utf-8'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge,chrome=1'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1'>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<script type="text/javascript" src="_static/js/jquery-1.11.0.min.js "></script>
+<script type="text/javascript" src="_static/js/jquery-fix.js "></script>
+<script type="text/javascript" src="_static/bootstrap-3.3.7/js/bootstrap.min.js "></script>
+<script type="text/javascript" src="_static/bootstrap-sphinx.js "></script>
+
+  </head><body>
+
+  <div id="navbar" class="navbar navbar-inverse navbar-default navbar-fixed-top">
+    <div class="container">
+      <div class="navbar-header">
+        <!-- .btn-navbar is used as the toggle for collapsed navbar content -->
+        <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".nav-collapse">
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a class="navbar-brand" href="#">
+          Optimisation of the Global Calculator</a>
+        <span class="navbar-text navbar-version pull-left"><b></b></span>
+      </div>
+
+        <div class="collapse navbar-collapse nav-collapse">
+          <ul class="nav navbar-nav">
+            
+            
+              <li class="dropdown globaltoc-container">
+  <a role="button"
+     id="dLabelGlobalToc"
+     data-toggle="dropdown"
+     data-target="#"
+     href="#">Site <b class="caret"></b></a>
+  <ul class="dropdown-menu globaltoc"
+      role="menu"
+      aria-labelledby="dLabelGlobalToc"><ul>
+<li class="toctree-l1"><a class="reference internal" href="optimisation_constraints/constraints.html">Sample optimisation constraints</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="MCMC_analysis.html">Monte Carlo Markov Chain analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="GA_Analysis.html">Genetic algorithms optimiser</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CMAES_analysis.html">Covariance Matrix Adaption Evolutionary Strategy analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ANN_analysis.html">Artificial Neural Networks analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/GA/GA_Analysis.html">Optimisation of the Global Calculator via Genetic Algorithms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/GA/GA_Analysis.html#set-up">Set-up</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#creating-a-new-generation">Creating a new generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#fitness-function">Fitness function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#selection">Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#mutation">Mutation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#crossover">Crossover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#enabling-multiple-constraints">Enabling multiple constraints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#defining-the-optimisation-constraints">Defining the optimisation constraints</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/GA/GA_Analysis.html#optimisation">Optimisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#iterations">Iterations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#cost-minimisation">Cost minimisation</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html">Optimisation of the Global Calculator via Monte Carlo Markov Chains</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#set-up">Set-up</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#temperature-sensitivity-analysis">Temperature sensitivity analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#cost-sensitivity-analysis">Cost sensitivity analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#generalising-mcmc-2-constraints-to-all-levers">Generalising MCMC (2 constraints) to all levers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#unbounded-prior-for-all-levers">Unbounded prior for all levers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#generating-observations">Generating observations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#defining-a-likelihood-function">Defining a likelihood function</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#running-mcmc-and-logging-results">Running MCMC and logging results</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#loading-pre-computed-results-24-hours-long-markov-chain">Loading pre-computed results (24-hours long Markov Chain)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#correlation-matrix-of-accepted-mcmc-lever-combinations">Correlation matrix of accepted MCMC lever combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#paired-density-and-scatter-plot-matrix-of-lever-combinations-accepted-by-mcmc">Paired density and scatter plot matrix of lever combinations accepted by MCMC</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#correlation-matrix-of-output-values">Correlation matrix of output values</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#export-correlation-data-to-gephi">Export correlation data to GEPHI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#posterior-distribution-of-accepted-mcmc-lever-combinations">Posterior distribution of accepted MCMC lever combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#posterior-distribution-of-model-outputs-accepted-by-mcmc">Posterior distribution of model outputs accepted by MCMC</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#evolution-of-temperature-values">Evolution of temperature values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#evolution-of-cost-values">Evolution of cost values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#acceptance-rate">Acceptance rate</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#autocorrelation-function-of-accepted-model-outputs">Autocorrelation function of accepted model outputs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#summary-of-inputs-to-the-global-calculator">Summary of inputs to the Global Calculator</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license/license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license/requirements.html">Requirements</a></li>
+</ul>
+</ul>
+</li>
+              
+                <li class="dropdown">
+  <a role="button"
+     id="dLabelLocalToc"
+     data-toggle="dropdown"
+     data-target="#"
+     href="#">Page <b class="caret"></b></a>
+  <ul class="dropdown-menu localtoc"
+      role="menu"
+      aria-labelledby="dLabelLocalToc"><ul>
+<li><a class="reference internal" href="#">Optimisation of the Global Calculator using Monte Carlo Markov Chain and Genetic Algorithms</a><ul>
+<li><a class="reference internal" href="#page-structure">Page structure</a></li>
+<li><a class="reference internal" href="#introduction">Introduction</a></li>
+<li><a class="reference internal" href="#setting-the-constraints-and-running-the-optimiser">Setting the constraints and running the optimiser</a></li>
+<li><a class="reference internal" href="#user-documentation">User documentation</a><ul>
+<li><a class="reference internal" href="#mcmc">MCMC</a></li>
+<li><a class="reference internal" href="#ga">GA</a></li>
+<li><a class="reference internal" href="#cma-es">CMA-ES</a></li>
+<li><a class="reference internal" href="#ann">ANN</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#usage-examples">Usage examples</a><ul>
+<li><a class="reference internal" href="#genetic-algorithms-optimisation">Genetic algorithms optimisation</a></li>
+<li><a class="reference internal" href="#monte-carlo-markov-chain-analysis">Monte Carlo Markov Chain analysis</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#housekeeping">Housekeeping</a></li>
+</ul>
+</li>
+</ul>
+</ul>
+</li>
+              
+            
+            
+              
+                
+  <li>
+    <a href="optimisation_constraints/constraints.html" title="Next Chapter: Defining the optimisation constraints"><span class="glyphicon glyphicon-chevron-right visible-sm"></span><span class="hidden-sm hidden-tablet">Defining the ... &raquo;</span>
+    </a>
+  </li>
+              
+            
+            
+            
+            
+              <li class="hidden-sm">
+<div id="sourcelink">
+  <a href="_sources/index.rst.txt"
+     rel="nofollow">Source</a>
+</div></li>
+            
+          </ul>
+
+          
+            
+<form class="navbar-form navbar-right" action="search.html" method="get">
+ <div class="form-group">
+  <input type="text" name="q" class="form-control" placeholder="Search" />
+ </div>
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+          
+        </div>
+    </div>
+  </div>
+
+<div class="container">
+  <div class="row">
+    <div class="body col-md-12 content" role="main">
+      
+  <div class="section" id="optimisation-of-the-global-calculator-using-monte-carlo-markov-chain-and-genetic-algorithms">
+<h1>Optimisation of the Global Calculator using Monte Carlo Markov Chain and Genetic Algorithms<a class="headerlink" href="#optimisation-of-the-global-calculator-using-monte-carlo-markov-chain-and-genetic-algorithms" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="page-structure">
+<h2>Page structure<a class="headerlink" href="#page-structure" title="Permalink to this headline">¶</a></h2>
+<p>This page contains documentation of all the methods used, two usage examples and the code’s license and installation requirements.</p>
+<p>To install Jupiter notebooks, go to: <a class="reference external" href="https://jupyter.readthedocs.io/en/latest/install.html">https://jupyter.readthedocs.io/en/latest/install.html</a></p>
+<p>To install any missing packages via conda, follow: <a class="reference external" href="https://docs.conda.io/projects/conda/en/latest/commands/install.html">https://docs.conda.io/projects/conda/en/latest/commands/install.html</a></p>
+<p>To open the notebooks, follow these instructions: <a class="reference external" href="https://jupyter-notebook-beginner-guide.readthedocs.io/en/latest/execute.html">https://jupyter-notebook-beginner-guide.readthedocs.io/en/latest/execute.html</a></p>
+</div>
+<div class="section" id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<p>This project includes four self-contained Jupyter notebooks with detailed step by step guide.</p>
+<p>They are located in the root directory and can be executed from their first to their last cell. They are:</p>
+<ul class="simple">
+<li><p>Markov Chain Monte Carlo analysis (<em>MCMC_Analysis.ipynb</em>) [<strong>Successful</strong>]</p></li>
+<li><p>Genetic Algorithms analysis (<em>GA_Analysis.ipynb</em>) [<strong>Successful</strong>]</p></li>
+<li><p>Covariance Matrix Adaption Evolutionary Strategy analysis (<em>CMAES_Analysis.ipynb</em>) [<strong>Unsuccessful</strong>]</p></li>
+<li><p>Artificial Neural Network analysis (<em>ANN_Analysis.ipynb</em>) [<strong>Unsuccessful</strong>]</p></li>
+</ul>
+</div>
+<div class="section" id="setting-the-constraints-and-running-the-optimiser">
+<h2>Setting the constraints and running the optimiser<a class="headerlink" href="#setting-the-constraints-and-running-the-optimiser" title="Permalink to this headline">¶</a></h2>
+<p>To change the optimisation constraints, the cell “<strong>Defining the optimisation constraints</strong>” in <em>GA_Analysis.ipynb</em> must be edited accordingly, as shown below.</p>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="optimisation_constraints/constraints.html">Sample optimisation constraints</a></li>
+</ul>
+</div>
+</div></blockquote>
+<p>The constraint names are listed here: <a class="reference external" href="http://tool.globalcalculator.org">http://tool.globalcalculator.org</a></p>
+<p>The input constraint values must be in the range [1, 4]. Each output constraint value has its own units and scale.</p>
+<p><em>Note that the optimiser will minimise GHG emissions per capita and maximise economic viability by default.</em></p>
+<p>The 2nd notebook “<em>GA_Analysis.ipynb</em>” can be run to perform the optimisation of the Global Calculator.</p>
+</div>
+<div class="section" id="user-documentation">
+<h2>User documentation<a class="headerlink" href="#user-documentation" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="mcmc">
+<h3>MCMC<a class="headerlink" href="#mcmc" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="MCMC_analysis.html">Monte Carlo Markov Chain analysis</a></li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="ga">
+<h3>GA<a class="headerlink" href="#ga" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="GA_Analysis.html">Genetic algorithms optimiser</a></li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="cma-es">
+<h3>CMA-ES<a class="headerlink" href="#cma-es" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="CMAES_analysis.html">Covariance Matrix Adaption Evolutionary Strategy analysis</a></li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="ann">
+<h3>ANN<a class="headerlink" href="#ann" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="ANN_analysis.html">Artificial Neural Networks analysis</a></li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="usage-examples">
+<h2>Usage examples<a class="headerlink" href="#usage-examples" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="genetic-algorithms-optimisation">
+<h3>Genetic algorithms optimisation<a class="headerlink" href="#genetic-algorithms-optimisation" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/GA/GA_Analysis.html">Optimisation of the Global Calculator via Genetic Algorithms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/GA/GA_Analysis.html#set-up">Set-up</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#creating-a-new-generation">Creating a new generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#fitness-function">Fitness function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#selection">Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#mutation">Mutation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#crossover">Crossover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#enabling-multiple-constraints">Enabling multiple constraints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#defining-the-optimisation-constraints">Defining the optimisation constraints</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/GA/GA_Analysis.html#optimisation">Optimisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#iterations">Iterations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/GA/GA_Analysis.html#cost-minimisation">Cost minimisation</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+<div class="section" id="monte-carlo-markov-chain-analysis">
+<h3>Monte Carlo Markov Chain analysis<a class="headerlink" href="#monte-carlo-markov-chain-analysis" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html">Optimisation of the Global Calculator via Monte Carlo Markov Chains</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#set-up">Set-up</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#temperature-sensitivity-analysis">Temperature sensitivity analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#cost-sensitivity-analysis">Cost sensitivity analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#generalising-mcmc-2-constraints-to-all-levers">Generalising MCMC (2 constraints) to all levers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#unbounded-prior-for-all-levers">Unbounded prior for all levers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#generating-observations">Generating observations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#defining-a-likelihood-function">Defining a likelihood function</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#running-mcmc-and-logging-results">Running MCMC and logging results</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#loading-pre-computed-results-24-hours-long-markov-chain">Loading pre-computed results (24-hours long Markov Chain)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#correlation-matrix-of-accepted-mcmc-lever-combinations">Correlation matrix of accepted MCMC lever combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#paired-density-and-scatter-plot-matrix-of-lever-combinations-accepted-by-mcmc">Paired density and scatter plot matrix of lever combinations accepted by MCMC</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#correlation-matrix-of-output-values">Correlation matrix of output values</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#export-correlation-data-to-gephi">Export correlation data to GEPHI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#posterior-distribution-of-accepted-mcmc-lever-combinations">Posterior distribution of accepted MCMC lever combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#posterior-distribution-of-model-outputs-accepted-by-mcmc">Posterior distribution of model outputs accepted by MCMC</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#evolution-of-temperature-values">Evolution of temperature values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#evolution-of-cost-values">Evolution of cost values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#acceptance-rate">Acceptance rate</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#autocorrelation-function-of-accepted-model-outputs">Autocorrelation function of accepted model outputs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/MCMC/MCMC_Analysis.html#summary-of-inputs-to-the-global-calculator">Summary of inputs to the Global Calculator</a></li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+</div>
+<div class="section" id="housekeeping">
+<h2>Housekeeping<a class="headerlink" href="#housekeeping" title="Permalink to this headline">¶</a></h2>
+<blockquote>
+<div><div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="license/license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="license/requirements.html">Requirements</a></li>
+</ul>
+</div>
+</div></blockquote>
+</div>
+</div>
+
+
+    </div>
+      
+  </div>
+</div>
+<footer class="footer">
+  <div class="container">
+    <p class="pull-right">
+      <a href="#">Back to top</a>
+      
+    </p>
+    <p>
+        &copy; Copyright 2020, Jorge Garcia.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 3.2.1.<br/>
+    </p>
+  </div>
+</footer>
+  </body>
+</html>
