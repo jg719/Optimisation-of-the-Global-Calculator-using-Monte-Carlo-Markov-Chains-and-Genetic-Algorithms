@@ -1,8 +1,0 @@
-Monte Carlo Markov Chain analysis
-*********************************
-
-.. automodule::  MCMC_test
-    :members:
-    :undoc-members:
-    :show-inheritance:
-

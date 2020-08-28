@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Optimisation of the Global Calculator via Genetic Algorithms &#8212; Optimisation of the Global Calculator 25/07/2020 documentation</title>
+    <link rel="stylesheet" href="../../_static/bootstrap-sphinx.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script src="../../_static/jquery.js"></script>
+    <script src="../../_static/underscore.js"></script>
+    <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Optimisation of the Global Calculator via Monte Carlo Markov Chains" href="../MCMC/MCMC_Analysis.html" />
+    <link rel="prev" title="Artificial Neural Networks analysis" href="../../ANN_analysis.html" />
+<meta charset='utf-8'>
+<meta http-equiv='X-UA-Compatible' content='IE=edge,chrome=1'>
+<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1'>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<script type="text/javascript" src="../../_static/js/jquery-1.11.0.min.js "></script>
+<script type="text/javascript" src="../../_static/js/jquery-fix.js "></script>
+<script type="text/javascript" src="../../_static/bootstrap-3.3.7/js/bootstrap.min.js "></script>
+<script type="text/javascript" src="../../_static/bootstrap-sphinx.js "></script>
+
+  </head><body>
+
+  <div id="navbar" class="navbar navbar-inverse navbar-default navbar-fixed-top">
+    <div class="container">
+      <div class="navbar-header">
+        <!-- .btn-navbar is used as the toggle for collapsed navbar content -->
+        <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".nav-collapse">
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a class="navbar-brand" href="../../index.html">
+          Optimisation of the Global Calculator</a>
+        <span class="navbar-text navbar-version pull-left"><b></b></span>
+      </div>
+
+        <div class="collapse navbar-collapse nav-collapse">
+          <ul class="nav navbar-nav">
+            
+            
+              <li class="dropdown globaltoc-container">
+  <a role="button"
+     id="dLabelGlobalToc"
+     data-toggle="dropdown"
+     data-target="#"
+     href="../../index.html">Site <b class="caret"></b></a>
+  <ul class="dropdown-menu globaltoc"
+      role="menu"
+      aria-labelledby="dLabelGlobalToc"><ul>
+<li class="toctree-l1"><a class="reference internal" href="../../optimisation_constraints/constraints.html">Sample optimisation constraints</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../MCMC_analysis.html">Monte Carlo Markov Chain analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../GA_Analysis.html">Genetic algorithms optimiser</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../CMAES_analysis.html">Covariance Matrix Adaption Evolutionary Strategy analysis</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../ANN_analysis.html">Artificial Neural Networks analysis</a></li>
+</ul>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Optimisation of the Global Calculator via Genetic Algorithms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#set-up">Set-up</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#creating-a-new-generation">Creating a new generation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#fitness-function">Fitness function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#selection">Selection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#mutation">Mutation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#crossover">Crossover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#enabling-multiple-constraints">Enabling multiple constraints</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#defining-the-optimisation-constraints">Defining the optimisation constraints</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#optimisation">Optimisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#iterations">Iterations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cost-minimisation">Cost minimisation</a></li>
+</ul>
+</li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html">Optimisation of the Global Calculator via Monte Carlo Markov Chains</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#set-up">Set-up</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#temperature-sensitivity-analysis">Temperature sensitivity analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#cost-sensitivity-analysis">Cost sensitivity analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#generalising-mcmc-2-constraints-to-all-levers">Generalising MCMC (2 constraints) to all levers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#unbounded-prior-for-all-levers">Unbounded prior for all levers</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#generating-observations">Generating observations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#defining-a-likelihood-function">Defining a likelihood function</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#running-mcmc-and-logging-results">Running MCMC and logging results</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#loading-pre-computed-results-24-hours-long-markov-chain">Loading pre-computed results (24-hours long Markov Chain)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#correlation-matrix-of-accepted-mcmc-lever-combinations">Correlation matrix of accepted MCMC lever combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#paired-density-and-scatter-plot-matrix-of-lever-combinations-accepted-by-mcmc">Paired density and scatter plot matrix of lever combinations accepted by MCMC</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#correlation-matrix-of-output-values">Correlation matrix of output values</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#export-correlation-data-to-gephi">Export correlation data to GEPHI</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#posterior-distribution-of-accepted-mcmc-lever-combinations">Posterior distribution of accepted MCMC lever combinations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#posterior-distribution-of-model-outputs-accepted-by-mcmc">Posterior distribution of model outputs accepted by MCMC</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#evolution-of-temperature-values">Evolution of temperature values</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#evolution-of-cost-values">Evolution of cost values</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#acceptance-rate">Acceptance rate</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#autocorrelation-function-of-accepted-model-outputs">Autocorrelation function of accepted model outputs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../MCMC/MCMC_Analysis.html#summary-of-inputs-to-the-global-calculator">Summary of inputs to the Global Calculator</a></li>
+</ul>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../license/license.html">License</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../license/requirements.html">Requirements</a></li>
+</ul>
+</ul>
+</li>
+              
+                <li class="dropdown">
+  <a role="button"
+     id="dLabelLocalToc"
+     data-toggle="dropdown"
+     data-target="#"
+     href="#">Page <b class="caret"></b></a>
+  <ul class="dropdown-menu localtoc"
+      role="menu"
+      aria-labelledby="dLabelLocalToc"><ul>
+<li><a class="reference internal" href="#">Optimisation of the Global Calculator via Genetic Algorithms</a></li>
+<li><a class="reference internal" href="#set-up">Set-up</a><ul>
+<li><a class="reference internal" href="#creating-a-new-generation">Creating a new generation</a></li>
+<li><a class="reference internal" href="#fitness-function">Fitness function</a></li>
+<li><a class="reference internal" href="#selection">Selection</a></li>
+<li><a class="reference internal" href="#mutation">Mutation</a></li>
+<li><a class="reference internal" href="#crossover">Crossover</a></li>
+<li><a class="reference internal" href="#enabling-multiple-constraints">Enabling multiple constraints</a><ul>
+<li><a class="reference internal" href="#enabling-input-constraints">Enabling input constraints</a></li>
+<li><a class="reference internal" href="#enabling-output-constraints">Enabling output constraints</a></li>
+<li><a class="reference internal" href="#finding-standard-deviation-of-each-output-normalisation-of-cost-function-values">Finding standard deviation of each output - Normalisation of cost function values</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#defining-the-optimisation-constraints">Defining the optimisation constraints</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#optimisation">Optimisation</a><ul>
+<li><a class="reference internal" href="#iterations">Iterations</a></li>
+<li><a class="reference internal" href="#cost-minimisation">Cost minimisation</a></li>
+</ul>
+</li>
+</ul>
+</ul>
+</li>
+              
+            
+            
+              
+                
+  <li>
+    <a href="../../ANN_analysis.html" title="Previous Chapter: Artificial Neural Networks analysis"><span class="glyphicon glyphicon-chevron-left visible-sm"></span><span class="hidden-sm hidden-tablet">&laquo; Artificial Ne...</span>
+    </a>
+  </li>
+  <li>
+    <a href="../MCMC/MCMC_Analysis.html" title="Next Chapter: Optimisation of the Global Calculator via Monte Carlo Markov Chains"><span class="glyphicon glyphicon-chevron-right visible-sm"></span><span class="hidden-sm hidden-tablet">Optimisation ... &raquo;</span>
+    </a>
+  </li>
+              
+            
+            
+            
+            
+              <li class="hidden-sm">
+<div id="sourcelink">
+  <a href="../../_sources/examples/GA/GA_Analysis.rst.txt"
+     rel="nofollow">Source</a>
+</div></li>
+            
+          </ul>
+
+          
+            
+<form class="navbar-form navbar-right" action="../../search.html" method="get">
+ <div class="form-group">
+  <input type="text" name="q" class="form-control" placeholder="Search" />
+ </div>
+  <input type="hidden" name="check_keywords" value="yes" />
+  <input type="hidden" name="area" value="default" />
+</form>
+          
+        </div>
+    </div>
+  </div>
+
+<div class="container">
+  <div class="row">
+    <div class="body col-md-12 content" role="main">
+      
+  <div class="section" id="optimisation-of-the-global-calculator-via-genetic-algorithms">
+<h1>Optimisation of the Global Calculator via Genetic Algorithms<a class="headerlink" href="#optimisation-of-the-global-calculator-via-genetic-algorithms" title="Permalink to this headline">¶</a></h1>
+<p>This investigation aims to generate different climate change mitigation
+pathways with the “Global Calculator” - a complex model used to forecast
+the world’s energy, food and land systems to 2050
+(<a class="reference external" href="http://tool.globalcalculator.org/">http://tool.globalcalculator.org/</a>). Performing a constrained
+optimisation of the model’s input parameter space yields alternative
+pathways to sustainability.</p>
+<p>The key challenge of such an optimisation is to explore a broad
+parameter space (~9e50 different parameter combinations) rapidly.</p>
+<p>Genetic algorithms are commonly used to generate solutions to
+optimisation problems by using biologically inspired operators such as
+mutation, crossover and selection.</p>
+<p>In this implementation, each generation contains a fixed number of
+chromosomes (lever combinations). The two fittest (measured by the cost
+function) chromosomes are selected. These two are mated, yielding a new
+generation. In this process, random mutations are introduced - These
+correspond to randomly moving a lever up or down by a quantity of 0.1.</p>
+<p>This implementation enables the user to find a lever combination that is
+closest to meeting the constraints. Such constraints are divided into
+four types:</p>
+<ul class="simple">
+<li><p>Input value constraints: The value of any input can be fixed. For
+example, as per our discussion, we can fix Electric &amp; Hydrogen to
+3.0, Global Population to 2.0, Wind to 2.5, Nuclear to 1.0 and Solar
+Capacity to 3.2.</p></li>
+<li><p>Input range constraints: I have bounded the range of each lever
+between 1.5 and 3.5 to avoid extreme / non-realistic values. The
+range of each lever can be specified – For example, I have
+(arbitrarily, for illustration purposes) decided to bound the Diet
+Levers (Calories consumed, Quantity of meat and Type of meat) between
+2.2 and 3.0.</p></li>
+<li><p>Output constraints: If you click the “Compare” tab, you can find
+around 55 output values that can be constrained. For example, I have
+(arbitrarily, for illustration purposes) decided to set a constraint
+for Total energy demand at 420 EJ/year and for Forest area at 4200
+million of hectares.</p></li>
+<li><p>Climate and GDP constraints: All combinations also seek to minimise
+climate impact and cost.</p></li>
+</ul>
+<p>After running the optimiser, a pathway that satisfies all the
+constraints listed above is generated:</p>
+<p><a class="reference external" href="http://tool.globalcalculator.org/globcalc.html?levers=2pl3r3vs3j2yhplitmptg2vqy1pyhwoiqmrtmlql3plxyyf222211111111/dashboard/en">http://tool.globalcalculator.org/globcalc.html?levers=2pl3r3vs3j2yhplitmptg2vqy1pyhwoiqmrtmlql3plxyyf222211111111/dashboard/en</a></p>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">csv</span>
+<span class="kn">from</span> <span class="nn">functools</span> <span class="k">import</span> <span class="n">reduce</span>
+<span class="kn">from</span> <span class="nn">openpyxl</span> <span class="k">import</span> <span class="n">load_workbook</span>
+
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="nn">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span>
+<span class="kn">from</span> <span class="nn">mpl_toolkits.mplot3d</span> <span class="k">import</span> <span class="n">Axes3D</span>
+<span class="kn">import</span> <span class="nn">seaborn</span> <span class="k">as</span> <span class="nn">sns</span>
+<span class="kn">import</span> <span class="nn">itertools</span>
+
+<span class="kn">import</span> <span class="nn">selenium</span>
+<span class="kn">from</span> <span class="nn">selenium</span> <span class="k">import</span> <span class="n">webdriver</span>
+<span class="kn">from</span> <span class="nn">selenium.common.exceptions</span> <span class="k">import</span> <span class="n">ElementClickInterceptedException</span>
+<span class="kn">from</span> <span class="nn">webdriver_manager.chrome</span> <span class="k">import</span> <span class="n">ChromeDriverManager</span>
+
+<span class="kn">from</span> <span class="nn">scipy.optimize</span> <span class="k">import</span> <span class="n">curve_fit</span>
+<span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="k">import</span> <span class="n">norm</span>
+<span class="kn">from</span> <span class="nn">scipy</span> <span class="k">import</span> <span class="n">optimize</span>
+<span class="kn">from</span> <span class="nn">scipy.stats</span> <span class="k">import</span> <span class="n">multivariate_normal</span>
+
+<span class="kn">from</span> <span class="nn">statsmodels.graphics.tsaplots</span> <span class="k">import</span> <span class="n">plot_pacf</span>
+<span class="kn">from</span> <span class="nn">statsmodels.graphics.tsaplots</span> <span class="k">import</span> <span class="n">plot_acf</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="set-up">
+<h1>Set-up<a class="headerlink" href="#set-up" title="Permalink to this headline">¶</a></h1>
+<p>Use selenium to load a Chrome webdriver.</p>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">driver</span> <span class="o">=</span> <span class="n">webdriver</span><span class="o">.</span><span class="n">Chrome</span><span class="p">(</span><span class="n">ChromeDriverManager</span><span class="p">()</span><span class="o">.</span><span class="n">install</span><span class="p">())</span> <span class="c1"># Set browser</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="n">WDM</span><span class="p">]</span> <span class="o">-</span> <span class="n">Current</span> <span class="n">google</span><span class="o">-</span><span class="n">chrome</span> <span class="n">version</span> <span class="ow">is</span> <span class="mf">84.0</span><span class="o">.</span><span class="mi">4147</span>
+<span class="p">[</span><span class="n">WDM</span><span class="p">]</span> <span class="o">-</span> <span class="n">Get</span> <span class="n">LATEST</span> <span class="n">driver</span> <span class="n">version</span> <span class="k">for</span> <span class="mf">84.0</span><span class="o">.</span><span class="mi">4147</span>
+<span class="p">[</span><span class="n">WDM</span><span class="p">]</span> <span class="o">-</span> <span class="n">Get</span> <span class="n">LATEST</span> <span class="n">driver</span> <span class="n">version</span> <span class="k">for</span> <span class="mf">84.0</span><span class="o">.</span><span class="mi">4147</span>
+<span class="p">[</span><span class="n">WDM</span><span class="p">]</span> <span class="o">-</span> <span class="n">Trying</span> <span class="n">to</span> <span class="n">download</span> <span class="n">new</span> <span class="n">driver</span> <span class="kn">from</span> <span class="nn">http</span><span class="p">:</span><span class="o">//</span><span class="n">chromedriver</span><span class="o">.</span><span class="n">storage</span><span class="o">.</span><span class="n">googleapis</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="mf">84.0</span><span class="o">.</span><span class="mf">4147.30</span><span class="o">/</span><span class="n">chromedriver_win32</span><span class="o">.</span><span class="n">zip</span>
+</pre></div>
+</div>
+<pre class="literal-block">[WDM] - Driver has been saved in cache [C:Users44783.wdmdriverschromedriverwin3284.0.4147.30]</pre>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">driver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;http://tool.globalcalculator.org/&#39;</span><span class="p">)</span> <span class="c1"># Open website</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+<span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>Read files mapping inputs and outputs to the calculator.</p>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">dfs</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="s2">&quot;Output_map.xlsx&quot;</span><span class="p">)</span> <span class="c1"># File mapping output lever names to xpaths</span>
+<span class="n">dfs_3</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_excel</span><span class="p">(</span><span class="s2">&quot;Input_map.xlsx&quot;</span><span class="p">)</span> <span class="c1"># File mapping input names to xpaths</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dfs</span><span class="p">)):</span> <span class="c1"># Generate html lever addresses and put them in the dataframe</span>
+    <span class="n">dfs</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;/html/body/table[1]/tbody/tr/td/table/tbody/tr[2]/td[1]/div[13]/div/table/tbody/tr[&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">dfs</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">strip</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;]/td[5]/div/font&#39;</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Each letter corresponds to a lever value: a = 1.0; b = 1.1; c = 1.2; ... C = 3.9; D = 4.0</span>
+<span class="n">letters</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;a&#39;</span><span class="p">,</span> <span class="s1">&#39;b&#39;</span><span class="p">,</span> <span class="s1">&#39;c&#39;</span><span class="p">,</span> <span class="s1">&#39;d&#39;</span><span class="p">,</span> <span class="s1">&#39;e&#39;</span><span class="p">,</span> <span class="s1">&#39;f&#39;</span><span class="p">,</span> <span class="s1">&#39;g&#39;</span><span class="p">,</span> <span class="s1">&#39;h&#39;</span><span class="p">,</span> <span class="s1">&#39;i&#39;</span><span class="p">,</span> <span class="s1">&#39;j&#39;</span><span class="p">,</span> <span class="s1">&#39;k&#39;</span><span class="p">,</span> <span class="s1">&#39;l&#39;</span><span class="p">,</span> <span class="s1">&#39;m&#39;</span><span class="p">,</span> <span class="s1">&#39;n&#39;</span><span class="p">,</span> <span class="s1">&#39;o&#39;</span><span class="p">,</span> <span class="s1">&#39;p&#39;</span><span class="p">,</span> <span class="s1">&#39;q&#39;</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">,</span> <span class="s1">&#39;s&#39;</span><span class="p">,</span> <span class="s1">&#39;t&#39;</span><span class="p">,</span> <span class="s1">&#39;u&#39;</span><span class="p">,</span> <span class="s1">&#39;v&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">,</span> <span class="s1">&#39;x&#39;</span><span class="p">,</span> <span class="s1">&#39;y&#39;</span><span class="p">,</span> <span class="s1">&#39;z&#39;</span><span class="p">,</span> <span class="s1">&#39;A&#39;</span><span class="p">,</span> <span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">,</span> <span class="s1">&#39;D&#39;</span><span class="p">]</span>
+<span class="n">lever_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dfs_3</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span> <span class="c1"># Create list with all lever names</span>
+<span class="n">output_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dfs</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span> <span class="c1"># Create list with all output names</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">map_to_letter</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Takes a float value in the range [1, 4.0] and returns its corresponding URL character&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">value</span> <span class="o">!=</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">!=</span> <span class="mi">3</span> <span class="ow">and</span> <span class="n">value</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span> <span class="c1"># Special cases</span>
+        <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;</span> <span class="mi">4</span><span class="p">:</span>
+            <span class="n">pos</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">value</span> <span class="o">-</span> <span class="mf">1.0</span><span class="p">)</span><span class="o">*</span><span class="mi">10</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">back</span> <span class="o">=</span> <span class="n">letters</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+            <span class="k">except</span><span class="p">:</span> <span class="c1"># Oops, the value is out of bounds</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Not enough letters, fetching position: &quot;</span><span class="p">,</span> <span class="n">pos</span><span class="p">,</span> <span class="s2">&quot; corresponding to value: &quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span> <span class="c1"># Special case: Value = 4</span>
+            <span class="n">back</span> <span class="o">=</span> <span class="n">letters</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">back</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">back</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">initial_chromosome</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Generates and return a random URL (address) and its corresponding lever values (input_levers)&quot;&quot;&quot;</span>
+    <span class="n">address</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">input_levers</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">string</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span> <span class="c1"># URL address to be stored here</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">49</span><span class="p">):</span> <span class="c1"># Generate a random value for each lever, map it to a letter and save it</span>
+        <span class="n">rand_float</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">18</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span><span class="o">/</span><span class="mi">10</span> <span class="c1"># Define bounds for random number generator (currently set to [1.8, 3.2])</span>
+        <span class="n">input_levers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">rand_float</span><span class="p">);</span> <span class="n">address</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">map_to_letter</span><span class="p">(</span><span class="n">rand_float</span><span class="p">))</span> <span class="c1"># Store them</span>
+    <span class="n">address</span><span class="p">[</span><span class="mi">43</span><span class="p">:</span><span class="mi">47</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="c1"># CCS values are fixed at 1 for the moment</span>
+    <span class="n">input_levers</span><span class="p">[</span><span class="mi">43</span><span class="p">:</span><span class="mi">47</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="c1"># CCS values are fixed at 1 for the moment</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">address</span><span class="p">:</span> <span class="c1"># Construct string containing the current lever combination</span>
+        <span class="n">string</span> <span class="o">=</span> <span class="n">string</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+    <span class="n">address</span> <span class="o">=</span> <span class="s2">&quot;http://tool.globalcalculator.org/globcalc.html?levers=&quot;</span> <span class="o">+</span> <span class="n">string</span> <span class="o">+</span> <span class="s2">&quot;2211111111/technology/en&quot;</span> <span class="c1"># Construct URL address</span>
+    <span class="k">return</span> <span class="n">address</span><span class="p">,</span> <span class="n">input_levers</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">new_URL</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">address</span> <span class="o">=</span> <span class="s2">&quot;http://tool.globalcalculator.org/globcalc.html?levers=l2wz222CBpp3pC3f2Dw3DC3plzgj1tA13pp2p223ri11111p22211111111/dashboard/en&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generate a new URL address by changing a lever value.</span>
+<span class="sd">        Parameters:</span>
+<span class="sd">        - Name (string): Target lever name</span>
+<span class="sd">        - Value (float): Target value for lever</span>
+<span class="sd">        - Address (string): URL where lever will be changed. Set to TIAM-UCL 2DS pathway by default.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        - URL (string): URL after changes.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">value</span> <span class="o">=</span> <span class="n">map_to_letter</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="c1"># Map value to letter</span>
+    <span class="n">index</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">find_lever_URL_position</span><span class="p">(</span><span class="n">name</span><span class="p">))</span> <span class="c1"># Find URL position of given lever</span>
+    <span class="n">URL</span> <span class="o">=</span> <span class="n">address</span><span class="p">[</span> <span class="p">:</span> <span class="mi">53</span> <span class="o">+</span> <span class="n">index</span><span class="p">]</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">+</span> <span class="n">address</span><span class="p">[</span><span class="mi">54</span> <span class="o">+</span> <span class="n">index</span> <span class="p">:]</span> <span class="c1"># Insert given value in its corresponding URL position</span>
+    <span class="k">return</span> <span class="n">URL</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">find_lever_URL_position</span><span class="p">(</span><span class="n">name</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Given a lever name, return its position in the URL&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">dfs_3</span><span class="p">[</span><span class="n">dfs_3</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">str</span><span class="o">.</span><span class="n">match</span><span class="p">(</span><span class="n">name</span><span class="p">)]</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="c1"># Get lever position to insert in the URL</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">open_lever_menus</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Opens all the lever menus of the Global Calculator&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">16</span><span class="p">):</span> <span class="c1"># Iterate through menus</span>
+        <span class="k">try</span><span class="p">:</span> <span class="c1"># Tries to open the menu</span>
+            <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;ml-open-close-link-&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span>  <span class="s1">&#39;&quot;]&#39;</span> <span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span> <span class="c1"># Open menu</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.3</span><span class="p">)</span> <span class="c1"># Server can&#39;t respond quicker than this</span>
+        <span class="k">except</span> <span class="n">ElementClickInterceptedException</span><span class="p">:</span> <span class="c1"># If opening menus too fast, then slow down</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;ml-open-close-link-&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">+</span>  <span class="s1">&#39;&quot;]&#39;</span> <span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="k">return</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">new_lever_combination</span><span class="p">(</span><span class="n">threshold</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">threshold_names</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="p">[]):</span>
+    <span class="sd">&quot;&quot;&quot;Returns an array containing a random value for each lever&quot;&quot;&quot;</span>
+    <span class="n">random_lever_values</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">threshold</span> <span class="o">==</span> <span class="kc">False</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lever_names</span><span class="p">)):</span>
+            <span class="n">random_lever_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span><span class="o">/</span><span class="mi">10</span><span class="p">)</span> <span class="c1"># Generate random lever value</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lever_names</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">lever_names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">in</span> <span class="n">threshold_names</span><span class="p">:</span>
+                <span class="n">lower_threshold</span><span class="p">,</span> <span class="n">upper_threshold</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">threshold_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">lever_names</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span>
+                <span class="n">random_lever_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="n">lower_threshold</span><span class="o">*</span><span class="mi">10</span><span class="p">,</span> <span class="n">upper_threshold</span><span class="o">*</span><span class="mi">10</span><span class="p">)</span><span class="o">/</span><span class="mi">10</span><span class="p">)</span> <span class="c1"># Generate random lever value</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">random_lever_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span><span class="o">/</span><span class="mi">10</span><span class="p">)</span> <span class="c1"># Generate random lever value</span>
+    <span class="k">return</span> <span class="n">random_lever_values</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">read_CO2</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;For the current lever combination, return the CO2 level (GtCO2)&quot;&quot;&quot;</span>
+    <span class="n">userid_element</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;container_dashboard_co2_budget&quot;]&#39;</span><span class="p">)</span> <span class="c1"># Find element that contains CO2 value</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.05</span><span class="p">)</span>
+    <span class="n">co2</span> <span class="o">=</span> <span class="n">userid_element</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()[</span><span class="o">-</span><span class="mi">6</span><span class="p">]</span> <span class="c1"># Get CO2 value from the container</span>
+    <span class="k">return</span> <span class="n">co2</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">moving_average</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span> <span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;Simple moving average filter&quot;&quot;&quot;</span>
+    <span class="n">ret</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span> <span class="c1"># Cumulative sum of input values</span>
+    <span class="n">ret</span><span class="p">[</span><span class="n">n</span><span class="p">:]</span> <span class="o">=</span> <span class="n">ret</span><span class="p">[</span><span class="n">n</span><span class="p">:]</span> <span class="o">-</span> <span class="n">ret</span><span class="p">[:</span><span class="o">-</span><span class="n">n</span><span class="p">]</span> <span class="c1"># Differences given by window length n</span>
+    <span class="k">return</span> <span class="n">ret</span><span class="p">[</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:]</span> <span class="o">/</span> <span class="n">n</span> <span class="c1"># Divide by window length</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">move_lever</span><span class="p">(</span><span class="n">lever</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>  <span class="n">address</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">driver</span><span class="o">.</span><span class="n">current_url</span><span class="p">),</span>
+               <span class="n">constraint</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">constraint_levers</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="p">[]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Sets a lever to a given value. Reads corresponding temperature and, if selected, cost values.</span>
+<span class="sd">    Parameters:</span>
+<span class="sd">        - lever (list of strings): Contains the names of the levers to be moved.</span>
+<span class="sd">        - value (list of floats): Contains the value of the levers to be moved - Automatically matched to lever names.</span>
+<span class="sd">        - costs (optional, boolean): Flag to decide whether to read cost values or not.</span>
+<span class="sd">        - address (optional, string): URL address corresponding to given lever combination.</span>
+<span class="sd">        - constraint (optional, boolean): Flaf to decide whether to set exact input constraints or not.</span>
+<span class="sd">        - constraint_levers (optional, list of strings): Contains the names of the levers to be fixed.</span>
+<span class="sd">        - constraint_values (optional, list of floats): Contains the values to fix the specified levers.</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        - output (list): Contains temperature and cost values for the new lever position</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Update URL address with input lever names and values, one at a time</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lever</span><span class="p">)):</span>
+        <span class="n">address</span> <span class="o">=</span> <span class="n">new_URL</span><span class="p">(</span><span class="n">lever</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">value</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">address</span> <span class="o">=</span> <span class="n">address</span><span class="p">)</span>
+
+    <span class="c1"># Overwrite for constraint</span>
+    <span class="k">if</span> <span class="n">constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">address</span> <span class="o">=</span> <span class="n">overwrite</span><span class="p">(</span><span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span><span class="p">,</span> <span class="n">address</span> <span class="o">=</span> <span class="n">address</span><span class="p">)</span>
+
+    <span class="c1"># Open website corresponding to the input values</span>
+    <span class="n">driver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">address</span><span class="p">)</span>
+
+    <span class="c1">########################################## IMPORTANT ####################################################</span>
+    <span class="c1"># All of the lines below are in charge of webscraping the temperature and, if selected, the cost values.</span>
+    <span class="c1"># The Global Calculator is a hard to webscrape website (sometimes, it results in bugs or uncoherent</span>
+    <span class="c1"># temperature and cost values). The code below ensures that, no matter what, the values will be read.</span>
+    <span class="c1"># To do so it performs different actions based on the current state of the website and the output values.</span>
+    <span class="c1">#########################################################################################################</span>
+
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+    <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+    <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Read temperature values</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">read_CO2</span><span class="p">()[:</span><span class="mi">4</span><span class="p">])</span> <span class="c1"># Read output CO2</span>
+    <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem reading output CO2? The code below sorts it</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">open_lever_menus</span><span class="p">()</span> <span class="c1"># Open lever menus</span>
+        <span class="n">move_lever</span><span class="p">([</span><span class="n">lever</span><span class="p">[</span><span class="mi">0</span><span class="p">]],[</span><span class="mf">1.3</span><span class="p">],</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="c1"># Move lever to an arbitrary value</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">address</span><span class="p">)</span> <span class="c1"># Open website back</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+        <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+        <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">read_CO2</span><span class="p">()[:</span><span class="mi">4</span><span class="p">])</span> <span class="c1"># Read output CO2</span>
+
+    <span class="c1"># Read cost values</span>
+    <span class="k">if</span> <span class="n">costs</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;mn-6&quot;]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span> <span class="c1"># Move to compare tab</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+        <span class="n">userid_element</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;container_costs_vs_counterfactual&quot;]/div/div[11]&#39;</span><span class="p">)</span> <span class="c1"># Read GDP</span>
+        <span class="n">cost_output</span> <span class="o">=</span> <span class="n">userid_element</span><span class="o">.</span><span class="n">text</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cost_output</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cost_output</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">))</span> <span class="c1"># Convert GDP from string to float</span>
+        <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem converting GDP? The code below sorts it</span>
+            <span class="n">cost_output</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cost_output</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">))</span>
+
+        <span class="c1"># Reload the page and bypass start</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span> <span class="c1"># Refresh</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+        <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">userid_element</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;container_costs_vs_counterfactual&quot;]/div/div[12]&#39;</span><span class="p">)</span> <span class="c1"># Read text below GDP value</span>
+        <span class="n">cost_flag</span> <span class="o">=</span> <span class="n">userid_element</span><span class="o">.</span><span class="n">text</span>
+
+        <span class="c1"># Find sign of GDP (less expensive =&gt; increase; more expensive =&gt; decrease)</span>
+        <span class="k">if</span> <span class="n">cost_flag</span> <span class="o">==</span> <span class="s1">&#39;less expensive&#39;</span><span class="p">:</span>
+            <span class="n">cost_output</span> <span class="o">=</span> <span class="o">-</span><span class="n">cost_output</span> <span class="c1"># Reverse sign</span>
+
+        <span class="c1"># Go back to the overview section</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;mn-1&quot;]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem going back to the overview section? The code below sorts it</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+            <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+            <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">[</span><span class="n">output</span><span class="p">,</span> <span class="n">cost_output</span><span class="p">]</span> <span class="c1"># Output temperature and cost values</span>
+    <span class="k">return</span>  <span class="n">output</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">move_lever</span><span class="p">(</span><span class="n">lever</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>  <span class="n">address</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">driver</span><span class="o">.</span><span class="n">current_url</span><span class="p">),</span>
+               <span class="n">constraint</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">constraint_levers</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="p">[]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Sets a lever to a given value. Reads corresponding temperature and, if selected, cost values.</span>
+<span class="sd">    Parameters:</span>
+<span class="sd">        - lever (list of strings): Contains the names of the levers to be moved.</span>
+<span class="sd">        - value (list of floats): Contains the value of the levers to be moved - Automatically matched to lever names.</span>
+<span class="sd">        - costs (optional, boolean): Flag to decide whether to read cost values or not.</span>
+<span class="sd">        - address (optional, string): URL address corresponding to given lever combination.</span>
+<span class="sd">        - constraint (optional, boolean): Flaf to decide whether to set exact input constraints or not.</span>
+<span class="sd">        - constraint_levers (optional, list of strings): Contains the names of the levers to be fixed.</span>
+<span class="sd">        - constraint_values (optional, list of floats): Contains the values to fix the specified levers.</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        - output (list): Contains temperature and cost values for the new lever position</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># Update URL address with input lever names and values, one at a time</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lever</span><span class="p">)):</span>
+        <span class="n">address</span> <span class="o">=</span> <span class="n">new_URL</span><span class="p">(</span><span class="n">lever</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">value</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">address</span> <span class="o">=</span> <span class="n">address</span><span class="p">)</span>
+
+    <span class="c1"># Overwrite for constraint</span>
+    <span class="k">if</span> <span class="n">constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">address</span> <span class="o">=</span> <span class="n">overwrite</span><span class="p">(</span><span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span><span class="p">,</span> <span class="n">address</span> <span class="o">=</span> <span class="n">address</span><span class="p">)</span>
+
+    <span class="c1"># Open website corresponding to the input values</span>
+    <span class="n">driver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">address</span><span class="p">)</span>
+
+    <span class="c1">########################################## IMPORTANT ####################################################</span>
+    <span class="c1"># All of the lines below are in charge of webscraping the temperature and, if selected, the cost values.</span>
+    <span class="c1"># The Global Calculator is a hard to webscrape website (sometimes, it results in bugs or uncoherent</span>
+    <span class="c1"># temperature and cost values). The code below ensures that, no matter what, the values will be read.</span>
+    <span class="c1"># To do so it performs different actions based on the current state of the website and the output values.</span>
+    <span class="c1">#########################################################################################################</span>
+
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+    <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+    <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Read temperature values</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">read_CO2</span><span class="p">()[:</span><span class="mi">4</span><span class="p">])</span> <span class="c1"># Read output CO2</span>
+    <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem reading output CO2? The code below sorts it</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">open_lever_menus</span><span class="p">()</span> <span class="c1"># Open lever menus</span>
+        <span class="n">move_lever</span><span class="p">([</span><span class="n">lever</span><span class="p">[</span><span class="mi">0</span><span class="p">]],[</span><span class="mf">2.0</span><span class="p">],</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="c1"># Move lever to an arbitrary value</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">address</span><span class="p">)</span> <span class="c1"># Open website back</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+        <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+        <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">read_CO2</span><span class="p">()[:</span><span class="mi">4</span><span class="p">])</span> <span class="c1"># Read output CO2 # CHANGED</span>
+
+    <span class="c1"># Read cost values</span>
+    <span class="k">if</span> <span class="n">costs</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;mn-6&quot;]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span> <span class="c1"># Move to compare tab</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+        <span class="n">userid_element</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;container_costs_vs_counterfactual&quot;]/div/div[11]&#39;</span><span class="p">)</span> <span class="c1"># Read GDP</span>
+        <span class="n">cost_output</span> <span class="o">=</span> <span class="n">userid_element</span><span class="o">.</span><span class="n">text</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">cost_output</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cost_output</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">))</span> <span class="c1"># Convert GDP from string to float</span>
+        <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem converting GDP? The code below sorts it</span>
+            <span class="n">cost_output</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">cost_output</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">))</span>
+
+        <span class="c1"># Reload the page and bypass start</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">refresh</span><span class="p">()</span> <span class="c1"># Refresh</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+        <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">userid_element</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;container_costs_vs_counterfactual&quot;]/div/div[12]&#39;</span><span class="p">)</span> <span class="c1"># Read text below GDP value</span>
+        <span class="n">cost_flag</span> <span class="o">=</span> <span class="n">userid_element</span><span class="o">.</span><span class="n">text</span>
+
+        <span class="c1"># Find sign of GDP (less expensive =&gt; increase; more expensive =&gt; decrease)</span>
+        <span class="k">if</span> <span class="n">cost_flag</span> <span class="o">==</span> <span class="s1">&#39;less expensive&#39;</span><span class="p">:</span>
+            <span class="n">cost_output</span> <span class="o">=</span> <span class="o">-</span><span class="n">cost_output</span> <span class="c1"># Reverse sign</span>
+
+        <span class="c1"># Go back to the overview section</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;mn-1&quot;]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem going back to the overview section? The code below sorts it</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+            <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+            <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">[</span><span class="n">output</span><span class="p">,</span> <span class="n">cost_output</span><span class="p">]</span> <span class="c1"># Output temperature and cost values</span>
+    <span class="k">return</span>  <span class="n">output</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">iterate</span><span class="p">(</span><span class="n">iterations</span> <span class="o">=</span> <span class="mi">5</span><span class="p">,</span> <span class="n">population_size</span> <span class="o">=</span> <span class="mi">30</span><span class="p">,</span>
+            <span class="n">constraint</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">constraint_levers</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="p">[],</span>
+            <span class="n">output_constraint</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">output_constraint_names</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">output_constraints</span> <span class="o">=</span> <span class="p">[],</span>
+            <span class="n">threshold</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>  <span class="n">threshold_names</span>  <span class="o">=</span> <span class="p">[],</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="p">[],</span>
+            <span class="n">plot</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="n">std_devs</span> <span class="o">=</span> <span class="p">[]</span> <span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a set of constraints performs GA iteration(s) on the Global Calculator.</span>
+<span class="sd">    Parameters:</span>
+<span class="sd">        - iterations (int): Number of GA iterations.</span>
+<span class="sd">        - population_size (int): Number of chromosomes per iteration.</span>
+<span class="sd">        - constraint (boolean): Flag to decide whether to fix input levers or not.</span>
+<span class="sd">        - constraint_levers (list of strings): Contains the names of the levers to be fixed.</span>
+<span class="sd">        - constraint_Values (list of floats): Contains the values of the levers to be fixed.</span>
+<span class="sd">        - output_constraint (boolean): Flag to decide whether to fix outputs or not.</span>
+<span class="sd">        - output_constraint_names (list of strings): Contains the names of the output to be fixed.</span>
+<span class="sd">        - output_constraints (list of floats): Contains the values of the output to be fixed.</span>
+<span class="sd">        - threshold (boolean): Flag to decide whether to bound levers within a range or not.</span>
+<span class="sd">        - threshold_names (list of strings): Contains the names of the levers to be bounded within a range.</span>
+<span class="sd">        - thresholds (list of list of floats): Contains the upper and lower threshold to bound the specified levers.</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        - all_fitness (list of floats): Contains the total fitness value of each generation.</span>
+<span class="sd">        - lever_values (list of lists of floats): Contains the lever values of all the chromosomes from the last generation.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">legends</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">9</span><span class="p">))</span>
+    <span class="n">all_fitness</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">lever_values</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">results</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">output_values</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">lever_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dfs_3</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span> <span class="c1"># Create list with all lever names</span>
+
+    <span class="c1"># Initialise population randomly</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">population_size</span><span class="p">):</span> <span class="c1"># Population size</span>
+
+        <span class="c1"># Generate chromosome and read associated temperature, cost and other output values</span>
+        <span class="n">lever_values_temp</span><span class="p">,</span> <span class="n">temperature_cost_temp</span> <span class="o">=</span> <span class="n">generate_chromosome</span><span class="p">(</span><span class="n">constraint</span> <span class="o">=</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">constraint_levers</span> <span class="o">=</span> <span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="n">constraint_values</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">threshold_names</span>  <span class="o">=</span> <span class="n">threshold_names</span><span class="p">,</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">)</span>  <span class="c1"># Generate chromosome</span>
+        <span class="n">lever_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">lever_values_temp</span><span class="p">)</span>
+        <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">temperature_cost_temp</span><span class="p">)</span> <span class="c1"># Calculate temperature and cost values associated to chromosome</span>
+        <span class="k">if</span> <span class="n">output_constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span> <span class="c1"># If output constraint set, read output</span>
+            <span class="n">output_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">read_outputs</span><span class="p">())</span>
+
+    <span class="c1"># Perform iterations of GA</span>
+    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">iterations</span><span class="p">):</span> <span class="c1"># Fixed number of iterations (replace by tolerance later on)</span>
+        <span class="c1"># Plotting routine</span>
+        <span class="k">if</span> <span class="n">plot</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">c</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">palette</span><span class="p">)</span>
+            <span class="n">count</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">results</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">count</span><span class="o">%</span><span class="k">population_size</span> == 0:
+                    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>  <span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">,</span> <span class="n">label</span> <span class="o">=</span> <span class="s2">&quot;Generation &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">j</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="c1">#&#39;darkorange&#39;</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">count</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span>  <span class="n">color</span><span class="o">=</span><span class="n">c</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlim</span><span class="p">(</span><span class="mi">2700</span><span class="p">,</span> <span class="mi">4500</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylim</span><span class="p">(</span><span class="o">-</span><span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;GtCO2 emissions per capita&quot;</span><span class="p">,</span> <span class="n">fontsize</span> <span class="o">=</span> <span class="mi">15</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;$\Delta$GDP&quot;</span><span class="p">,</span> <span class="n">fontsize</span> <span class="o">=</span> <span class="mi">15</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Population evolution&quot;</span><span class="p">,</span> <span class="n">fontsize</span> <span class="o">=</span> <span class="mi">20</span><span class="p">)</span>
+            <span class="n">plt</span><span class="o">.</span><span class="n">legend</span><span class="p">()</span>
+            <span class="c1">#legends.append(&quot;Generation &quot; + str(j))</span>
+            <span class="c1">#plt.show()</span>
+
+        <span class="c1"># Evaluate fitness</span>
+        <span class="n">fitness_values</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">results</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">output_constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">fitness_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fitness</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">output_constraint</span> <span class="o">=</span> <span class="n">output_constraint</span><span class="p">,</span> <span class="n">current_output_values</span> <span class="o">=</span> <span class="n">output_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">output_constraint_names</span> <span class="o">=</span>  <span class="n">output_constraint_names</span><span class="p">,</span> <span class="n">output_constraints</span> <span class="o">=</span> <span class="n">output_constraints</span><span class="p">,</span> <span class="n">std_devs</span> <span class="o">=</span> <span class="n">std_devs</span><span class="p">))</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">fitness_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fitness</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+        <span class="n">all_fitness</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">fitness_values</span><span class="p">))</span> <span class="c1"># Find sum of fitness</span>
+
+        <span class="c1"># Find fittest candidates &lt;=&gt; Parents</span>
+        <span class="n">fittest_index</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">fitness_values</span><span class="p">)),</span> <span class="n">key</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">sub</span><span class="p">:</span> <span class="n">fitness_values</span><span class="p">[</span><span class="n">sub</span><span class="p">])[:</span><span class="mi">2</span><span class="p">]</span> <span class="c1"># Find the fittest 2</span>
+        <span class="n">parent_1</span> <span class="o">=</span> <span class="n">lever_values</span><span class="p">[</span><span class="n">fittest_index</span> <span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="c1"># Find lever combination of parent 1</span>
+        <span class="n">parent_2</span> <span class="o">=</span> <span class="n">lever_values</span><span class="p">[</span><span class="n">fittest_index</span> <span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="c1"># Lever combination of aprent 2</span>
+
+        <span class="c1"># Printing routine</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Generation: &quot;</span><span class="p">,</span> <span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;; Fitness is: &quot;</span><span class="p">,</span> <span class="nb">sum</span><span class="p">(</span><span class="n">fitness_values</span><span class="p">))</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Temperature and cost values: &quot;</span><span class="p">,</span> <span class="n">results</span><span class="p">[</span><span class="n">fittest_index</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="s2">&quot;; &quot;</span><span class="p">,</span> <span class="n">results</span><span class="p">[</span><span class="n">fittest_index</span><span class="p">[</span><span class="mi">1</span><span class="p">]])</span>
+        <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Parents:&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">parent_1</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="n">parent_2</span><span class="p">,</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Crossover and mutation</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">lever_values</span><span class="p">)):</span> <span class="c1"># Perform crossover by mating parents using uniform crossover (high mutation prob)</span>
+
+            <span class="c1"># If some inputs are bounded within thresholds, take into account when mating</span>
+            <span class="k">if</span> <span class="n">lever_names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">in</span> <span class="n">threshold_names</span><span class="p">:</span>
+                <span class="n">th</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">[</span><span class="n">threshold_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">lever_names</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span> <span class="c1"># Temporary variable containing current threshold</span>
+                <span class="n">lever_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">mate</span><span class="p">(</span><span class="n">parent_1</span><span class="p">,</span> <span class="n">parent_2</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">threshold_value</span> <span class="o">=</span> <span class="n">th</span><span class="p">)</span> <span class="c1"># Generates full new set of lever combination</span>
+
+            <span class="c1"># Otherwise mate right away</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">lever_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">mate</span><span class="p">(</span><span class="n">parent_1</span><span class="p">,</span> <span class="n">parent_2</span><span class="p">)</span> <span class="c1"># Generates full new set of lever combinations</span>
+
+        <span class="n">results</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">output_values</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># Calculate temperature and cost of each lever combination and overwrite lever values according to constraints</span>
+        <span class="k">for</span> <span class="n">lever_combination</span> <span class="ow">in</span> <span class="n">lever_values</span><span class="p">:</span> <span class="c1"># For each chromosome</span>
+            <span class="n">lever_combination_temp</span> <span class="o">=</span> <span class="n">lever_combination</span> <span class="c1"># Store it in a temp variable</span>
+            <span class="c1"># Overwrite lever values with constraints. If current lever is not constrained, it does nothing</span>
+            <span class="n">lever_names</span><span class="p">,</span> <span class="n">lever_combination</span> <span class="o">=</span> <span class="n">overwrite_lever_values</span><span class="p">(</span><span class="n">lever_names</span><span class="p">,</span> <span class="n">lever_combination</span><span class="p">,</span> <span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span><span class="p">)</span>
+            <span class="n">lever_values</span><span class="p">[</span><span class="n">lever_values</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">lever_combination_temp</span><span class="p">)]</span> <span class="o">=</span> <span class="n">lever_combination</span> <span class="c1"># Set current lever values after constraint</span>
+            <span class="c1"># Read temperature and cost values for given lever combination (w or w/o constraint)</span>
+            <span class="n">results</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">move_lever</span><span class="p">(</span><span class="n">lever_names</span><span class="p">,</span> <span class="n">lever_combination</span><span class="p">,</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">constraint</span> <span class="o">=</span> <span class="n">constraint</span><span class="p">,</span>  <span class="n">constraint_levers</span> <span class="o">=</span> <span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="n">constraint_values</span><span class="p">))</span>
+            <span class="c1"># Read outher output values for current lever combination</span>
+            <span class="k">if</span> <span class="n">output_constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="n">output_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">read_outputs</span><span class="p">())</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">all_fitness</span><span class="p">,</span> <span class="n">lever_values</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># lever_names</span>
+</pre></div>
+</div>
+<div class="section" id="creating-a-new-generation">
+<h2>Creating a new generation<a class="headerlink" href="#creating-a-new-generation" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">generate_chromosome</span><span class="p">(</span><span class="n">constraint</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">constraint_levers</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="p">[],</span>
+                        <span class="n">threshold</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">threshold_names</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="p">[]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Initialises a chromosome and returns its corresponding lever values, and temperature and cost.</span>
+<span class="sd">    Parameters:</span>
+<span class="sd">        - constraint (boolean): Flag to select whether any inputs have been fixed.</span>
+<span class="sd">        - constraint_levers (list of strings): Contains the name of levers to be fixed.</span>
+<span class="sd">        - constraint_values (list of floats): Contains the values to fix the selected levers to.</span>
+<span class="sd">        - threshold (boolean): Flag to select whether any inputs have to be bounded within a range.</span>
+<span class="sd">        - threshold_names (list of strings): Contains the name of the levers to be bounded within a range.</span>
+<span class="sd">        - thresholds (list of lists of floats): Contains the upper and lower bound for each specified lever.</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        - random_lever_values (list of floats): Contains lever values corresponding to generated chromosome.</span>
+<span class="sd">        - result (list): Contains temperature and cost values corresponding to the current chromosome.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">lever_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dfs_3</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span> <span class="c1"># Create list with all lever names</span>
+    <span class="c1"># Generate random lever combination</span>
+    <span class="n">random_lever_values</span> <span class="o">=</span> <span class="n">new_lever_combination</span><span class="p">(</span><span class="n">threshold</span> <span class="o">=</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">threshold_names</span> <span class="o">=</span> <span class="n">threshold_names</span><span class="p">,</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">)</span>
+    <span class="c1"># Fix specified input levers</span>
+    <span class="k">if</span> <span class="n">constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="n">lever_names</span><span class="p">,</span> <span class="n">random_lever_values</span> <span class="o">=</span> <span class="n">overwrite_lever_values</span><span class="p">(</span><span class="n">lever_names</span><span class="p">,</span> <span class="n">random_lever_values</span><span class="p">,</span> <span class="n">constraint_levers</span><span class="p">,</span>  <span class="n">constraint_values</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">move_lever</span><span class="p">(</span><span class="n">lever_names</span><span class="p">,</span> <span class="n">random_lever_values</span><span class="p">,</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">constraint</span> <span class="o">=</span> <span class="n">constraint</span><span class="p">,</span> <span class="n">constraint_levers</span> <span class="o">=</span> <span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="n">constraint_values</span><span class="p">)</span> <span class="c1"># Move lever accordingly and read temperature and cost valuesw</span>
+    <span class="k">return</span> <span class="n">random_lever_values</span><span class="p">,</span> <span class="n">result</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="fitness-function">
+<h2>Fitness function<a class="headerlink" href="#fitness-function" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">fitness</span><span class="p">(</span><span class="n">chromosome</span><span class="p">,</span> <span class="n">target_temperature</span> <span class="o">=</span> <span class="mi">2850</span><span class="p">,</span> <span class="n">target_cost</span> <span class="o">=</span> <span class="o">-</span><span class="mf">3.5</span><span class="p">,</span> <span class="n">output_constraint</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">current_output_values</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">output_constraint_names</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">output_constraints</span> <span class="o">=</span> <span class="p">[],</span> <span class="n">std_devs</span> <span class="o">=</span> <span class="p">[]):</span>
+    <span class="sd">&quot;&quot;&quot;Need to apply some sort of normalisation. Divide by standard deviation&quot;&quot;&quot;</span>
+    <span class="n">total_cost</span> <span class="o">=</span> <span class="mi">0</span> <span class="c1"># Initialise fitness</span>
+    <span class="n">lever_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dfs_3</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span> <span class="c1"># Create list with all lever names</span>
+    <span class="n">output_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">dfs</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span> <span class="c1"># Create list with all output names</span>
+    <span class="k">if</span> <span class="n">output_constraint</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span> <span class="c1"># If output constraints have been set, take into account in fitness function</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">output_constraint_names</span><span class="p">)):</span> <span class="c1"># Iterate through output constraints</span>
+            <span class="k">if</span> <span class="n">output_constraint_names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">in</span>  <span class="n">output_names</span><span class="p">:</span> <span class="c1"># Ensure name is correct, otherwise ignore constraint</span>
+                <span class="c1"># Equality constraint of specified output value. Normalised by diving it by an estimate of its standard deviation.</span>
+                <span class="n">total_cost</span> <span class="o">+=</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">current_output_values</span><span class="p">[</span><span class="n">output_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">output_constraint_names</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span> <span class="o">-</span> <span class="n">output_constraints</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span><span class="o">/</span><span class="n">std_devs</span><span class="p">[</span><span class="n">output_names</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">output_constraint_names</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span>
+    <span class="c1"># Equality constraint for temperature value and inequality constraint for cost value (normalised with their approxiamte std dev)</span>
+    <span class="n">total_cost</span> <span class="o">+=</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">chromosome</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="n">target_temperature</span><span class="p">)</span><span class="o">/</span><span class="mf">18204.97</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">chromosome</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">target_cost</span><span class="p">)</span><span class="o">/</span><span class="mf">34.59</span><span class="p">)</span>
+    <span class="k">return</span>  <span class="n">total_cost</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="selection">
+<h2>Selection<a class="headerlink" href="#selection" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">selection</span><span class="p">(</span><span class="n">fitness_values</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Given an array of fitness values, find the indeces and the values of the 2 fittest candidates -&gt; Parents&quot;&quot;&quot;</span>
+    <span class="n">fittest_index</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">fitness_values</span><span class="p">)),</span> <span class="n">key</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">sub</span><span class="p">:</span> <span class="n">fitness_values</span><span class="p">[</span><span class="n">sub</span><span class="p">])[:</span><span class="mi">2</span><span class="p">]</span> <span class="c1"># Find 2 fittest candidates</span>
+    <span class="n">parent_1</span><span class="p">,</span> <span class="n">parent_2</span> <span class="o">=</span> <span class="n">lever_values</span><span class="p">[</span><span class="n">fittest_index</span> <span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">lever_values</span><span class="p">[</span><span class="n">fittest_index</span> <span class="p">[</span><span class="mi">1</span><span class="p">]]</span> <span class="c1"># Find values of parents</span>
+    <span class="k">return</span> <span class="n">parent_1</span><span class="p">,</span> <span class="n">parent_2</span><span class="p">,</span> <span class="n">fittest_index</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="mutation">
+<h2>Mutation<a class="headerlink" href="#mutation" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">mutated_genes</span><span class="p">(</span><span class="n">lever_value</span><span class="p">,</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">threshold</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">threshold_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">threshold_value</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;Mutate gene by randomly moving a lever up or down by 0.1. Returns the mutated gene (the new lever value)&quot;&quot;&quot;</span>
+    <span class="n">move</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.</span>
+    <span class="n">prob</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span><span class="o">/</span><span class="mi">100</span> <span class="c1"># Generate random gene</span>
+    <span class="k">if</span> <span class="n">prob</span> <span class="o">&lt;</span> <span class="mf">0.5</span><span class="p">:</span> <span class="n">move</span> <span class="o">=</span> <span class="o">-</span><span class="mf">0.1</span> <span class="c1"># Move lever down</span>
+    <span class="k">else</span><span class="p">:</span> <span class="n">move</span> <span class="o">=</span> <span class="mf">0.1</span> <span class="c1"># Move lever up</span>
+    <span class="c1"># If the lever value is out of bounds, reverse direction of step (taking specified threshold into account)</span>
+    <span class="k">if</span> <span class="n">threshold</span> <span class="o">==</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">lever_value</span> <span class="o">+</span> <span class="n">move</span> <span class="o">&lt;</span> <span class="n">threshold_value</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">or</span> <span class="p">(</span><span class="n">lever_value</span> <span class="o">+</span> <span class="n">move</span> <span class="o">&gt;</span> <span class="n">threshold_value</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">move</span> <span class="o">=</span> <span class="o">-</span><span class="n">move</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">lever_value</span> <span class="o">+</span> <span class="n">move</span> <span class="o">&lt;</span> <span class="n">thresholds</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="ow">or</span> <span class="p">(</span><span class="n">lever_value</span> <span class="o">+</span> <span class="n">move</span> <span class="o">&gt;</span> <span class="n">thresholds</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+            <span class="n">move</span> <span class="o">=</span> <span class="o">-</span><span class="n">move</span>
+    <span class="k">return</span> <span class="nb">round</span><span class="p">(</span><span class="n">lever_value</span> <span class="o">+</span> <span class="n">move</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="crossover">
+<h2>Crossover<a class="headerlink" href="#crossover" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">mate</span><span class="p">(</span><span class="n">parent_1</span><span class="p">,</span> <span class="n">parent_2</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">threshold_name</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="n">threshold_value</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39; Takes a couple of parents, performs crossover, and returns resulting child. &#39;&#39;&#39;</span>
+        <span class="n">child_chromosome</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">p1</span><span class="p">,</span> <span class="n">p2</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">parent_1</span><span class="p">,</span> <span class="n">parent_2</span><span class="p">):</span>
+            <span class="n">prob</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>  <span class="c1"># Generate random value</span>
+            <span class="k">if</span> <span class="n">prob</span> <span class="o">&lt;</span> <span class="mf">0.4</span><span class="p">:</span> <span class="c1"># Select gene from 1st parent</span>
+                <span class="n">child_chromosome</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p1</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prob</span> <span class="o">&lt;</span> <span class="mf">0.8</span><span class="p">:</span> <span class="c1"># Select gene from 2nd parent</span>
+                <span class="n">child_chromosome</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">p2</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">prob</span> <span class="o">&lt;</span> <span class="mf">0.9</span><span class="p">:</span>
+                <span class="n">child_chromosome</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mutated_genes</span><span class="p">(</span><span class="n">p1</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">threshold_name</span> <span class="o">=</span> <span class="n">threshold_name</span><span class="p">,</span> <span class="n">threshold_value</span> <span class="o">=</span> <span class="n">threshold_value</span><span class="p">))</span>  <span class="c1"># Mutate gene from 1st parent</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">child_chromosome</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mutated_genes</span><span class="p">(</span><span class="n">p2</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="n">threshold</span><span class="p">,</span> <span class="n">threshold_name</span> <span class="o">=</span> <span class="n">threshold_name</span><span class="p">,</span> <span class="n">threshold_value</span> <span class="o">=</span> <span class="n">threshold_value</span><span class="p">))</span> <span class="c1"># Mutate gene from 2nd parent</span>
+        <span class="k">return</span> <span class="n">child_chromosome</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="enabling-multiple-constraints">
+<h2>Enabling multiple constraints<a class="headerlink" href="#enabling-multiple-constraints" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="enabling-input-constraints">
+<h3>Enabling input constraints<a class="headerlink" href="#enabling-input-constraints" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">overwrite</span><span class="p">(</span><span class="n">levers</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">address</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">driver</span><span class="o">.</span><span class="n">current_url</span><span class="p">)):</span>
+    <span class="sd">&quot;&quot;&quot;Given a set of lever names and corresponding values, overwrite specified lever combination&quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">levers</span><span class="p">)):</span> <span class="c1"># Overwrite 1 value at a time</span>
+        <span class="n">address</span> <span class="o">=</span> <span class="n">new_URL</span><span class="p">(</span><span class="n">levers</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">address</span> <span class="o">=</span> <span class="n">address</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">address</span>
+
+<span class="k">def</span> <span class="nf">overwrite_lever_values</span><span class="p">(</span><span class="n">levers</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">constraint_levers</span><span class="p">,</span> <span class="n">constraint_values</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Given a set of lever names and corresponding values, and a set of</span>
+<span class="sd">    constrained lever names and their values, return the corresponding lever combination and its values.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">levers</span><span class="p">)):</span> <span class="c1"># Iterate through all levers</span>
+        <span class="k">if</span> <span class="n">levers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="ow">in</span> <span class="n">constraint_levers</span><span class="p">:</span> <span class="c1"># If current lever is constrained</span>
+            <span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">constraint_values</span><span class="p">[</span><span class="n">constraint_levers</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">levers</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span> <span class="c1"># Update</span>
+    <span class="k">return</span> <span class="n">levers</span><span class="p">,</span> <span class="n">values</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="enabling-output-constraints">
+<h3>Enabling output constraints<a class="headerlink" href="#enabling-output-constraints" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">read_outputs</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Reads all outputs and returns them as a list (empirical scraping)&quot;&quot;&quot;</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+    <span class="n">compare_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;mp-nav-compare&quot;]&#39;</span><span class="p">)</span> <span class="c1"># Move to the &quot;Compare&quot; section</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">compare_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="k">except</span><span class="p">:</span>
+        <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+        <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+        <span class="n">compare_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="n">out_vals</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">dfs</span><span class="p">)):</span>
+        <span class="n">userid_element</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="n">dfs</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="mi">2</span><span class="p">])</span>
+        <span class="n">out_vals</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">userid_element</span><span class="o">.</span><span class="n">text</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;%&quot;</span><span class="p">)))</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.1</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_xpath</span><span class="p">(</span><span class="s1">&#39;//*[@id=&quot;mn-1&quot;]&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="k">except</span><span class="p">:</span> <span class="c1"># Problem going back to the overview section? The code below sorts it</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mf">0.2</span><span class="p">)</span>
+        <span class="n">id_box</span> <span class="o">=</span> <span class="n">driver</span><span class="o">.</span><span class="n">find_element_by_id</span><span class="p">(</span><span class="s1">&#39;lets-start&#39;</span><span class="p">)</span> <span class="c1"># Bypass &quot;Start&quot; screen</span>
+        <span class="n">id_box</span><span class="o">.</span><span class="n">click</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">out_vals</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="finding-standard-deviation-of-each-output-normalisation-of-cost-function-values">
+<h3>Finding standard deviation of each output - Normalisation of cost function values<a class="headerlink" href="#finding-standard-deviation-of-each-output-normalisation-of-cost-function-values" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Generate 20 random lever combinations and measure their standard deviation</span>
+<span class="n">lever_values</span> <span class="o">=</span> <span class="p">[];</span> <span class="n">output_values</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">20</span><span class="p">):</span> <span class="c1"># Generate 20 random lever combinations</span>
+    <span class="n">random_lever_values</span> <span class="o">=</span> <span class="n">new_lever_combination</span><span class="p">()</span> <span class="c1"># Generate random lever combination</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="n">move_lever</span><span class="p">(</span><span class="n">lever_names</span><span class="p">,</span> <span class="n">random_lever_values</span><span class="p">,</span> <span class="n">costs</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="c1"># Move lever accordingly</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">temp</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1000</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">temp</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">&gt;-</span><span class="mi">14</span><span class="p">):</span> <span class="c1"># Check for spurious values</span>
+        <span class="n">lever_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">temp</span><span class="p">)</span>
+        <span class="n">output_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">read_outputs</span><span class="p">())</span>
+<span class="n">output_data</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">output_values</span><span class="p">))</span>
+<span class="n">std_devs</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">output_data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:])):</span> <span class="c1"># Read std dev of outputs corresponding to each lever combination</span>
+    <span class="n">std_devs</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output_data</span><span class="o">.</span><span class="n">iloc</span><span class="p">[:,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">std</span><span class="p">())</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="defining-the-optimisation-constraints">
+<h2>Defining the optimisation constraints<a class="headerlink" href="#defining-the-optimisation-constraints" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Specify input levers to fix</span>
+<span class="n">constraint_lever_names</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;CCS electricity&#39;</span><span class="p">,</span>
+<span class="s1">&#39;GGR1&#39;</span><span class="p">,</span>
+<span class="s1">&#39;GGR2&#39;</span><span class="p">,</span>
+<span class="s1">&#39;GGR3&#39;</span><span class="p">,</span>
+<span class="s1">&#39;GGR4&#39;</span><span class="p">]</span>
+<span class="n">constraint_lever_values</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>
+
+<span class="c1"># Specify input levers to bound within a threshold</span>
+<span class="n">threshold_names</span>  <span class="o">=</span> <span class="p">[</span> <span class="s1">&#39;Solar&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Wind&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;Global population&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;Electric &amp; hydrogen&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;CCS manufacturing&#39;</span><span class="p">,</span>
+<span class="s1">&#39;Nuclear&#39;</span><span class="p">,</span>
+<span class="s1">&#39;Calories consumed&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;Quantitiy of meat&#39;</span><span class="p">,</span>
+  <span class="s1">&#39;Type of meat&#39;</span><span class="p">,</span>
+ <span class="s1">&#39;Livestock grains/residues fed&#39;</span><span class="p">,</span>
+<span class="s1">&#39;Land-use efficiency&#39;</span><span class="p">]</span>
+<span class="n">thresholds</span> <span class="o">=</span> <span class="p">[[</span><span class="mf">2.6</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">],</span> <span class="p">[</span><span class="mf">2.5</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">2.8</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.5</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">]]</span>
+
+<span class="c1"># Specify output constraints</span>
+<span class="c1">#output_constraint_names = [&#39;Total energy demand (EJ / year)&#39;, &#39;Forest area (native and commercial, millions of hectares&#39;]</span>
+<span class="c1">#output_constraints = [420, 4100]</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">palette</span> <span class="o">=</span> <span class="n">itertools</span><span class="o">.</span><span class="n">cycle</span><span class="p">(</span><span class="n">sns</span><span class="o">.</span><span class="n">color_palette</span><span class="p">(</span><span class="n">palette</span> <span class="o">=</span> <span class="s2">&quot;Paired&quot;</span><span class="p">,</span> <span class="n">n_colors</span> <span class="o">=</span> <span class="mi">9</span><span class="p">))</span>
+</pre></div>
+</div>
+</div>
+</div>
+<div class="section" id="optimisation">
+<h1>Optimisation<a class="headerlink" href="#optimisation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="iterations">
+<h2>Iterations<a class="headerlink" href="#iterations" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="c1"># Run GA optimiser</span>
+<span class="n">fitness_progress</span><span class="p">,</span> <span class="n">lever_vals</span> <span class="o">=</span> <span class="n">iterate</span><span class="p">(</span><span class="n">iterations</span> <span class="o">=</span> <span class="mi">9</span><span class="p">,</span> <span class="n">plot</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">population_size</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span> <span class="n">constraint</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span> <span class="n">threshold</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>  <span class="n">constraint_levers</span> <span class="o">=</span> <span class="n">constraint_lever_names</span><span class="p">,</span> <span class="n">constraint_values</span> <span class="o">=</span> <span class="n">constraint_lever_values</span><span class="p">,</span>  <span class="n">threshold_names</span> <span class="o">=</span> <span class="n">threshold_names</span><span class="p">,</span> <span class="n">thresholds</span> <span class="o">=</span> <span class="n">thresholds</span><span class="p">,</span> <span class="n">output_constraint_names</span> <span class="o">=</span> <span class="n">output_constraint_names</span><span class="p">,</span> <span class="n">output_constraints</span> <span class="o">=</span> <span class="n">output_constraints</span><span class="p">)</span><span class="c1">##, std_devs = std_devs)</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Generation</span><span class="p">:</span>  <span class="mi">1</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">5.670242897334173</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">3802</span><span class="p">,</span> <span class="o">-</span><span class="mf">4.37</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">3423</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.57</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">1.1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">2</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">1.462300582401043</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">3210</span><span class="p">,</span> <span class="o">-</span><span class="mf">4.01</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">3580</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.62</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">3</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">0.6675545232639337</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">3020</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.83</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">3052</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.78</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">4</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">0.38637274489033</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">2977</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.63</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">2966</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.67</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">5</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">1.1163830431576325</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">2906</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.59</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">2923</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.76</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">6</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">0.2567286675058426</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">2842</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.55</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">2849</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.57</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">3.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">7</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">0.15218625644619693</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">2851</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.44</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">2833</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.47</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">8</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">0.14346718216650817</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">2842</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.51</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">2832</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.49</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+
+<span class="n">Generation</span><span class="p">:</span>  <span class="mi">9</span> <span class="p">;</span> <span class="n">Fitness</span> <span class="ow">is</span><span class="p">:</span>  <span class="mf">0.16811875632277545</span>
+<span class="n">Temperature</span> <span class="ow">and</span> <span class="n">cost</span> <span class="n">values</span><span class="p">:</span>  <span class="p">[</span><span class="mi">2841</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.49</span><span class="p">]</span> <span class="p">;</span>  <span class="p">[</span><span class="mi">2858</span><span class="p">,</span> <span class="o">-</span><span class="mf">3.46</span><span class="p">]</span>
+<span class="n">Parents</span><span class="p">:</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.4</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">]</span>
+<span class="p">[</span><span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">2.4</span><span class="p">,</span> <span class="mf">2.7</span><span class="p">,</span> <span class="mf">1.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.6</span><span class="p">,</span> <span class="mf">1.7</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">2.2</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.1</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">2.5</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.8</span><span class="p">,</span> <span class="mf">2.9</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mf">1.6</span><span class="p">,</span> <span class="mf">2.3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">1.9</span><span class="p">]</span>
+</pre></div>
+</div>
+<img alt="../../_images/output_45_1.png" src="../../_images/output_45_1.png" />
+</div>
+<div class="section" id="cost-minimisation">
+<h2>Cost minimisation<a class="headerlink" href="#cost-minimisation" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">temp_fitness_progress</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">temp_fitness_progress</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span>
+</pre></div>
+</div>
+<div class="highlight-ipython3 notranslate"><div class="highlight"><pre><span></span><span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">figsize</span> <span class="o">=</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">7</span><span class="p">))</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">title</span><span class="p">(</span><span class="s2">&quot;Cost as a function of generations&quot;</span><span class="p">,</span> <span class="n">fontsize</span> <span class="o">=</span> <span class="mi">16</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;Generation&quot;</span><span class="p">,</span> <span class="n">fontsize</span> <span class="o">=</span> <span class="mi">16</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Cost&quot;</span><span class="p">,</span> <span class="n">fontsize</span> <span class="o">=</span> <span class="mi">16</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">temp_fitness_progress</span><span class="p">,</span> <span class="s1">&#39;-o&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">[</span><span class="o">&lt;</span><span class="n">matplotlib</span><span class="o">.</span><span class="n">lines</span><span class="o">.</span><span class="n">Line2D</span> <span class="n">at</span> <span class="mh">0x245282d81c8</span><span class="o">&gt;</span><span class="p">]</span>
+</pre></div>
+</div>
+<img alt="../../_images/output_48_1.png" src="../../_images/output_48_1.png" />
+</div>
+</div>
+
+
+    </div>
+      
+  </div>
+</div>
+<footer class="footer">
+  <div class="container">
+    <p class="pull-right">
+      <a href="#">Back to top</a>
+      
+    </p>
+    <p>
+        &copy; Copyright 2020, Jorge Garcia.<br/>
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 3.2.1.<br/>
+    </p>
+  </div>
+</footer>
+  </body>
+</html>
